@@ -147,7 +147,31 @@ async function init() {
       name TEXT UNIQUE,
       last_run TEXT
     );
+
+    -- blog posts table
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      slug TEXT UNIQUE,
+      excerpt TEXT,
+      content TEXT,
+      category TEXT,
+      read_time TEXT,
+      author_name TEXT,
+      author_role TEXT,
+      published_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
+
+  // migration: add status to posts if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(posts)").all()
+    const hasStatus = info.some(c=>c.name==='status')
+    if (!hasStatus){
+      db.exec("ALTER TABLE posts ADD COLUMN status TEXT DEFAULT 'Draft'")
+    }
+  }catch(e){ console.error('posts status migration failed', e && e.message) }
 
   // migration: add price_monthly to plans if missing
   try{

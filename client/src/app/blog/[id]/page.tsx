@@ -2,113 +2,55 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, User, ArrowLeft, Share2 } from "lucide-react";
+import { Calendar, Clock, User, ArrowLeft, Share2, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/marketing/Navbar";
 import { Footer } from "@/components/marketing/Footer";
-
-// Mock data - in a real app this would come from an API/CMS
-const posts = [
-  {
-    id: 1,
-    title: "Introducing WaaS v2.0: The Future of WhatsApp Automation",
-    content: `
-      <p>We are thrilled to announce the release of WaaS v2.0, a major update that completely redefines how businesses interact with WhatsApp.</p>
-      
-      <h2>What's New?</h2>
-      <p>Our team has been working tirelessly for the past six months to bring you a more robust, faster, and scalable platform. Here are the key highlights:</p>
-      
-      <ul>
-        <li><strong>New Core Engine:</strong> We rewrote our message processing engine from scratch in Rust, resulting in 10x faster message delivery.</li>
-        <li><strong>Enhanced Webhooks:</strong> You can now subscribe to granular events like 'message_read', 'message_failed', and 'contact_blocked'.</li>
-        <li><strong>Visual Flow Builder:</strong> Build complex chatbots using our new drag-and-drop interface. No coding required!</li>
-      </ul>
-
-      <h2>Why the Change?</h2>
-      <p>As our user base grew, we noticed that many of you were pushing the limits of our previous architecture. We wanted to ensure that WaaS could scale with you, whether you're sending 100 messages a day or 100,000.</p>
-
-      <h2>Getting Started</h2>
-      <p>To upgrade to v2.0, simply log in to your dashboard and follow the migration guide. It takes less than 5 minutes, and all your existing data will be preserved.</p>
-    `,
-    date: "Feb 8, 2026",
-    readTime: "5 min read",
-    author: "Faiez",
-    role: "Founder & CEO",
-    category: "Product"
-  },
-  {
-    id: 2,
-    title: "How to Build a WhatsApp Chatbot in 5 Minutes",
-    content: `
-      <p>Chatbots are a great way to automate customer support and engagement. In this tutorial, we'll show you how to build a simple auto-reply bot using WaaS.</p>
-
-      <h2>Prerequisites</h2>
-      <p>Before we begin, make sure you have:</p>
-      <ul>
-        <li>A WaaS account (sign up for free)</li>
-        <li>A WhatsApp number linked to your account</li>
-        <li>A basic understanding of HTTP webhooks</li>
-      </ul>
-
-      <h2>Step 1: Set up a Webhook</h2>
-      <p>Go to your WaaS dashboard and navigate to the "Webhooks" section. Create a new webhook pointing to your server's endpoint (e.g., https://api.yoursite.com/webhook).</p>
-
-      <h2>Step 2: Handle Incoming Messages</h2>
-      <p>When a user sends a message to your WhatsApp number, WaaS will send a POST request to your webhook. Here's a simple Node.js example to handle it:</p>
-
-      <pre><code>app.post('/webhook', (req, res) => {
-  const { from, body } = req.body;
-  
-  if (body.toLowerCase() === 'hello') {
-    sendMessage(from, 'Hi there! How can I help you?');
-  }
-  
-  res.sendStatus(200);
-});</code></pre>
-
-      <h2>Step 3: Test It Out</h2>
-      <p>Send "hello" to your WhatsApp number. You should receive an instant reply! It's that simple.</p>
-    `,
-    date: "Feb 1, 2026",
-    readTime: "8 min read",
-    author: "Team WaaS",
-    role: "Developer Relations",
-    category: "Tutorial"
-  },
-  {
-    id: 3,
-    title: "Best Practices for WhatsApp Marketing Campaigns",
-    content: `
-      <p>WhatsApp has an open rate of over 98%, making it one of the most effective marketing channels. However, it also has strict policies to prevent spam.</p>
-
-      <h2>1. Get Opt-in Consent</h2>
-      <p>Never send messages to users who haven't explicitly agreed to receive them. This is the fastest way to get your number banned.</p>
-
-      <h2>2. Provide Value, Not Just Noise</h2>
-      <p>Don't just blast promotional offers. Send useful updates, order notifications, or personalized content that your users actually care about.</p>
-
-      <h2>3. Respect Opt-out Requests</h2>
-      <p>Always provide an easy way for users to unsubscribe. For example, "Reply STOP to unsubscribe". If a user asks to stop, honor it immediately.</p>
-
-      <h2>Conclusion</h2>
-      <p>By following these simple rules, you can build a sustainable and high-converting marketing channel on WhatsApp.</p>
-    `,
-    date: "Jan 25, 2026",
-    readTime: "6 min read",
-    author: "Marketing Team",
-    role: "Growth",
-    category: "Guides"
-  }
-];
+import api from "@/lib/api";
 
 export default function BlogPostPage() {
   const params = useParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = params.id as string;
   
-  const post = posts.find(p => p.id === id);
+  const [post, setPost] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  if (!post) {
+  useEffect(() => {
+    async function fetchPost() {
+      try {
+        const res = await api.get(`/blog/${id}`);
+        setPost({
+          id: res.data.post.id,
+          title: res.data.post.title,
+          content: res.data.post.content,
+          date: new Date(res.data.post.published_at).toLocaleDateString(),
+          readTime: res.data.post.read_time,
+          author: res.data.post.author_name,
+          role: res.data.post.author_role,
+          category: res.data.post.category
+        });
+      } catch (e) {
+        console.error("Failed to fetch post", e);
+        setError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    if (id) fetchPost();
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
+  if (error || !post) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-black text-zinc-900 dark:text-zinc-50">
         <h1 className="text-2xl font-bold mb-4">Post not found</h1>

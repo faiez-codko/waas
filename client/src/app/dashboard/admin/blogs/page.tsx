@@ -1,97 +1,116 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Edit2, Trash2, Eye, X, FileText, User } from "lucide-react";
-
-// Mock data moved to initial state
-const initialBlogs = [
-  {
-    id: 1,
-    title: "Introducing WaaS 2.0",
-    status: "Published",
-    author: "Faiez",
-    date: "Oct 24, 2023",
-    views: 1250,
-    excerpt: "We are excited to announce the release of WaaS 2.0 with new features."
-  },
-  {
-    id: 2,
-    title: "How to automate WhatsApp with AI",
-    status: "Published",
-    author: "Sarah Johnson",
-    date: "Oct 15, 2023",
-    views: 3400,
-    excerpt: "Learn how to leverage AI to automate your WhatsApp customer support."
-  },
-  {
-    id: 3,
-    title: "The Future of Customer Support",
-    status: "Draft",
-    author: "David Chen",
-    date: "Nov 01, 2023",
-    views: 0,
-    excerpt: "Customer support is evolving rapidly. Here is what to expect in 2024."
-  }
-];
+import { useState, useEffect } from "react";
+import { Plus, Edit2, Trash2, Eye, X, FileText, User, Clock, Tag, AlignLeft } from "lucide-react";
+import api from "@/lib/api";
 
 export default function BlogsPage() {
-  const [blogs, setBlogs] = useState(initialBlogs);
+  const [blogs, setBlogs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<any>(null);
+  
   const [formData, setFormData] = useState({
     title: "",
-    author: "",
+    author_name: "",
+    author_role: "Admin",
     status: "Draft",
-    excerpt: ""
+    excerpt: "",
+    content: "",
+    category: "General",
+    read_time: "5 min read"
   });
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  async function fetchPosts() {
+    try {
+      const res = await api.get('/blog/admin/list');
+      setBlogs(res.data.posts);
+    } catch (e) {
+      console.error("Failed to fetch posts", e);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const handleOpenModal = (post: any = null) => {
     if (post) {
       setEditingPost(post);
       setFormData({
         title: post.title,
-        author: post.author,
-        status: post.status,
-        excerpt: post.excerpt || ""
+        author_name: post.author_name || "",
+        author_role: post.author_role || "Admin",
+        status: post.status || "Draft",
+        excerpt: post.excerpt || "",
+        content: post.content || "",
+        category: post.category || "General",
+        read_time: post.read_time || "5 min read"
       });
     } else {
       setEditingPost(null);
       setFormData({
         title: "",
-        author: "",
+        author_name: "Admin",
+        author_role: "Admin",
         status: "Draft",
-        excerpt: ""
+        excerpt: "",
+        content: "",
+        category: "General",
+        read_time: "5 min read"
       });
     }
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this post?")) {
-      setBlogs(blogs.filter(blog => blog.id !== id));
+      try {
+        await api.delete(`/blog/${id}`);
+        setBlogs(blogs.filter(blog => blog.id !== id));
+      } catch (e) {
+        console.error("Failed to delete post", e);
+        alert("Failed to delete post");
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingPost) {
-      setBlogs(blogs.map(blog => 
-        blog.id === editingPost.id 
-          ? { ...blog, ...formData }
-          : blog
-      ));
-    } else {
-      const newPost = {
-        id: blogs.length + 1, // Simple ID generation
-        ...formData,
-        date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
-        views: 0
-      };
-      setBlogs([...blogs, newPost]);
+    try {
+      if (editingPost) {
+        await api.put(`/blog/${editingPost.id}`, formData);
+        setBlogs(blogs.map(blog => 
+          blog.id === editingPost.id 
+            ? { ...blog, ...formData, published_at: blog.published_at } 
+            : blog
+        ));
+      } else {
+        const res = await api.post('/blog', {
+            ...formData,
+            published_at: new Date().toISOString()
+        });
+        const newPost = {
+            id: res.data.id,
+            ...formData,
+            published_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+        };
+        setBlogs([newPost, ...blogs]);
+      }
+      setIsModalOpen(false);
+    } catch (e: any) {
+      console.error("Failed to save post", e);
+      alert("Failed to save post");
     }
-    setIsModalOpen(false);
   };
+
+  if (isLoading) {
+    return <div className="p-8">Loading posts...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -120,7 +139,7 @@ export default function BlogsPage() {
                 <th className="px-6 py-3 font-medium">Status</th>
                 <th className="px-6 py-3 font-medium">Author</th>
                 <th className="px-6 py-3 font-medium">Date</th>
-                <th className="px-6 py-3 font-medium">Views</th>
+                <th className="px-6 py-3 font-medium">Category</th>
                 <th className="px-6 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
@@ -141,23 +160,20 @@ export default function BlogsPage() {
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                       }`}
                     >
-                      {post.status}
+                      {post.status || "Draft"}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    {post.author}
+                    {post.author_name}
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    {post.date}
+                    {post.published_at ? new Date(post.published_at).toLocaleDateString() : "-"}
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    {post.views.toLocaleString()}
+                    {post.category}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800">
-                        <Eye className="h-4 w-4" />
-                      </button>
                       <button 
                         onClick={() => handleOpenModal(post)}
                         className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-indigo-600 dark:hover:bg-zinc-800"
@@ -174,6 +190,13 @@ export default function BlogsPage() {
                   </td>
                 </tr>
               ))}
+              {blogs.length === 0 && (
+                <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">
+                        No posts found. Create one to get started.
+                    </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -181,8 +204,8 @@ export default function BlogsPage() {
 
       {/* Blog Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900 my-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold">
                 {editingPost ? "Edit Post" : "Create New Post"}
@@ -196,33 +219,65 @@ export default function BlogsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Title</label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                    placeholder="Enter post title"
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Title</label>
+                    <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                        type="text"
+                        required
+                        value={formData.title}
+                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        placeholder="Post title"
+                    />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Category</label>
+                    <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                        type="text"
+                        value={formData.category}
+                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        placeholder="e.g. Tutorial"
+                    />
+                    </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Author</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    required
-                    value={formData.author}
-                    onChange={(e) => setFormData({...formData, author: e.target.value})}
-                    className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                    placeholder="Enter author name"
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Author Name</label>
+                    <div className="relative">
+                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                        type="text"
+                        required
+                        value={formData.author_name}
+                        onChange={(e) => setFormData({...formData, author_name: e.target.value})}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        placeholder="Author name"
+                    />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Read Time</label>
+                    <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                        type="text"
+                        value={formData.read_time}
+                        onChange={(e) => setFormData({...formData, read_time: e.target.value})}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        placeholder="e.g. 5 min read"
+                    />
+                    </div>
                 </div>
               </div>
 
@@ -243,9 +298,22 @@ export default function BlogsPage() {
                 <textarea
                   value={formData.excerpt}
                   onChange={(e) => setFormData({...formData, excerpt: e.target.value})}
-                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 px-3 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black min-h-[80px]"
-                  placeholder="Short description of the post..."
+                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 px-3 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black min-h-[60px]"
+                  placeholder="Short description..."
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Content (HTML)</label>
+                <div className="relative">
+                    <AlignLeft className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                    <textarea
+                    value={formData.content}
+                    onChange={(e) => setFormData({...formData, content: e.target.value})}
+                    className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black min-h-[200px] font-mono"
+                    placeholder="<p>Write your post content here...</p>"
+                    />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">

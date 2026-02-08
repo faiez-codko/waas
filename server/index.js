@@ -28,6 +28,9 @@ db.init().catch(console.error)
 
 app.get('/health', (req, res) => res.json({ ok: true }))
 
+// blog routes
+app.use('/blog', require('./src/blog'))
+
 // admin-only listing of all sessions
 app.use('/admin', auth.verifyToken, auth.requireRole('admin'), require('./src/admin'))
 
