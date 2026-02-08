@@ -137,5 +137,19 @@ app.get('/sessions/:id', auth.verifyToken, async (req, res) => {
   }
 })
 
-const port = process.env.PORT || 4000
-app.listen(port, () => console.log('Waas server listening on', port))
+const port = Number(process.env.PORT) || 4000
+
+function startServer(p){
+  const server = app.listen(p, () => console.log('Waas server listening on', p))
+  server.on('error', (e)=>{
+    if (e && e.code === 'EADDRINUSE'){
+      console.warn(`Port ${p} in use, trying ${p+1}...`)
+      setTimeout(()=>startServer(p+1),100)
+    }else{
+      console.error('Server error', e)
+      process.exit(1)
+    }
+  })
+}
+
+startServer(port)
