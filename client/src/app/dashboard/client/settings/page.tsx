@@ -4,27 +4,19 @@ import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
 import { 
   User, 
-  Settings, 
   Bell, 
   Shield, 
   Save, 
   Camera, 
   Mail, 
   Smartphone, 
-  Globe, 
-  Clock, 
-  Moon, 
-  Sun,
-  Monitor,
-  LogOut,
-  Trash2,
   Key,
   Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function UserSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'notifications' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'security'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,9 +26,6 @@ export default function UserSettingsPage() {
     email: "",
     phone: "",
     avatar: "https://github.com/shadcn.png",
-    language: "en",
-    timezone: "UTC-5",
-    theme: "system",
     notifications: {
       email_marketing: false,
       email_security: true,
@@ -107,7 +96,6 @@ export default function UserSettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'account', label: 'Account', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
   ];
@@ -242,90 +230,6 @@ export default function UserSettingsPage() {
                           />
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'account' && (
-                <div className="space-y-6">
-                  {/* Preferences */}
-                  <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Preferences</h3>
-                    <div className="grid gap-6 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Language</label>
-                        <div className="relative">
-                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                          <select
-                            value={user.language}
-                            onChange={(e) => setUser({ ...user, language: e.target.value })}
-                            className="w-full appearance-none rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-8 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-100"
-                          >
-                            <option value="en">English</option>
-                            <option value="es">Spanish</option>
-                            <option value="fr">French</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Timezone</label>
-                        <div className="relative">
-                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                          <select
-                            value={user.timezone}
-                            onChange={(e) => setUser({ ...user, timezone: e.target.value })}
-                            className="w-full appearance-none rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-8 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-100"
-                          >
-                            <option value="UTC-5">Eastern Time (US & Canada)</option>
-                            <option value="UTC-8">Pacific Time (US & Canada)</option>
-                            <option value="UTC+0">UTC</option>
-                            <option value="UTC+1">Central European Time</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Appearance */}
-                  <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Appearance</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
-                        { id: 'light', label: 'Light', icon: Sun },
-                        { id: 'dark', label: 'Dark', icon: Moon },
-                        { id: 'system', label: 'System', icon: Monitor },
-                      ].map((theme) => (
-                        <button
-                          key={theme.id}
-                          onClick={() => setUser({ ...user, theme: theme.id })}
-                          className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-all ${
-                            user.theme === theme.id
-                              ? "border-indigo-600 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:border-indigo-500 dark:text-indigo-400"
-                              : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                          }`}
-                        >
-                          <theme.icon className="h-6 w-6" />
-                          <span className="text-sm font-medium">{theme.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Danger Zone */}
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-900/30 dark:bg-red-900/10">
-                    <h3 className="font-semibold text-red-600 dark:text-red-400 mb-4">Danger Zone</h3>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Delete Account</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Permanently delete your account and all of your content.
-                        </p>
-                      </div>
-                      <button className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                        Delete Account
-                      </button>
                     </div>
                   </div>
                 </div>
