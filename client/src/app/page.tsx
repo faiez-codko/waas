@@ -8,11 +8,16 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-white via-zinc-50 to-zinc-100 dark:from-black dark:via-zinc-900 dark:to-zinc-950">
       <header className="mx-auto max-w-7xl px-6 py-8">
         <nav className="flex items-center justify-between">
+          <div className="md:hidden">
+            <a href="/login" className="text-sm text-zinc-700 dark:text-zinc-300">Sign in</a>
+          </div>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 shadow-lg flex items-center justify-center text-white font-bold">W</div>
             <span className="font-semibold text-lg">WaaS</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-zinc-700 dark:text-zinc-300">
+            <a href="/pricing" className="hover:underline">Pricing</a>
+            <a href="/login" className="hover:underline">Sign in</a>
             <a href="#features" className="hover:underline">Features</a>
             <a href="#pricing" className="hover:underline">Pricing</a>
             <a href="#docs" className="hover:underline">Docs</a>
