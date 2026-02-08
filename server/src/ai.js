@@ -1,37 +1,42 @@
-const axios = require('axios')
+const OpenAI = require('openai')
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const apiKey = process.env.OPENAI_API_KEY
+const baseURL = process.env.OPENAI_BASE_URL
 
-if (!OPENAI_API_KEY) {
+if (!apiKey) {
   console.warn('OPENAI_API_KEY not set — AI features will fail until provided')
 }
 
+// Initialize OpenAI client
+// Note: OpenAI SDK automatically picks up OPENAI_API_KEY from env, but we can pass it explicitly too.
+// We also pass baseURL if it's defined.
+const client = new OpenAI({
+  apiKey: apiKey,
+  baseURL: baseURL || undefined
+})
+
 async function chatCompletion({ model='gpt-3.5-turbo', systemPrompt='', messages=[] }){
-  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured')
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
 
-  const payload = {
-    model,
-    messages: [
-      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-      ...messages
-    ],
-    max_tokens: 1024,
-    temperature: 0.7
-  }
+  try {
+    const completion = await client.chat.completions.create({
+      model,
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        ...messages
+      ],
+      max_tokens: 1024,
+      temperature: 0.7
+    })
 
-  const res = await axios.post('https://api.openai.com/v1/chat/completions', payload, {
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
+    if (completion.choices && completion.choices.length) {
+      return completion.choices.map(c => c.message && c.message.content).filter(Boolean).join('\n')
     }
-  })
-
-  const data = res.data
-  // return assistant text (concatenate if multiple choices)
-  if (data && data.choices && data.choices.length) {
-    return data.choices.map(c => c.message && c.message.content).filter(Boolean).join('\n')
+    return null
+  } catch (e) {
+    console.error('OpenAI Completion Error:', e.response ? e.response.data : e.message)
+    throw e
   }
-  return null
 }
 
 module.exports = { chatCompletion }

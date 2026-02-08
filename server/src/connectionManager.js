@@ -137,7 +137,7 @@ class ConnectionManager {
 
     const sock = makeWASocket({
       auth: state,
-      browser: Browsers.ubuntu('Chrome'),
+      browser: Browsers.ubuntu('WAAS AI'),
       printQRInTerminal: false,
       connectTimeoutMs: 60000,
       retryRequestDelayMs: 2000,
