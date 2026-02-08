@@ -1,35 +1,137 @@
-WaaS — WhatsApp Automation as a Service
+# WaaS — WhatsApp Automation as a Service
 
-About
------
-WaaS is an open-source project to provide tools and APIs for automating WhatsApp workflows: customer support, alerts, campaigns, templates, scheduling, and analytics. The repository contains a Next.js frontend in the client/ folder and a backend (if present) in the server/ folder.
+WaaS is a comprehensive open-source platform designed to automate WhatsApp workflows. It provides a robust infrastructure for building, deploying, and managing AI-powered WhatsApp agents for customer support, engagement, and automated interactions.
 
-Current status
---------------
-- Frontend: Next.js (app router) + Tailwind CSS
-- Pages: Landing, Pricing, Login, Register
-- Animations: framer-motion used for small UI polish
+The project is built as a monorepo containing a modern **Next.js frontend** and a scalable **Node.js/Express backend**.
 
-Development
------------
-To run the frontend locally:
+## 🚀 Key Features
 
-1. cd client
-2. npm install
-3. npm run dev
+### 🤖 AI-Powered Agents
+- **Smart Responses**: Integrate with OpenAI (GPT models) to provide intelligent, context-aware responses.
+- **Custom System Prompts**: Configure agents with specific personas and instructions.
+- **Session Management**: Bind specific agents to WhatsApp sessions.
 
-Contributing
-------------
-Contributions are welcome. Create issues or pull requests for new features, bug fixes, or improvements.
+### 📱 WhatsApp Integration
+- **Easy Connection**: Scan a QR code to link your WhatsApp account (powered by `@whiskeysockets/baileys`).
+- **Real-time Status**: Live connection status updates via WebSockets.
+- **Multi-Device Support**: Works with WhatsApp's multi-device feature.
 
-About the developer
--------------------
-This repository is currently being developed with the assistance of an autonomous AI agent (Polly). Polly helps scaffold, implement features, and make commits to speed up development. If you prefer changes to be made only by human maintainers, please note that in an issue and a human teammate will take over.
+### ⚡ Dashboard & Management
+- **Client Dashboard**: Manage agents, view chat history, configure settings, and handle subscriptions.
+- **Admin Panel**: User management, blog publishing, and system-wide subscription monitoring.
+- **Secure Authentication**: JWT-based authentication for secure access.
 
-Security & credentials
-----------------------
-Do not commit secrets or credentials to this repository. Use environment variables or a secrets manager for sensitive configuration.
+### 🛠 Technical Highlights
+- **Real-time Communication**: Built with `socket.io` for instant QR code updates and message handling.
+- **Responsive UI**: Modern interface built with Tailwind CSS and Framer Motion.
+- **Database**: Uses SQLite (`better-sqlite3`) for a lightweight yet fast database solution (easy to swap for other SQL databases).
 
-License
--------
-MIT (add license file if desired)
+## 🛠️ Tech Stack
+
+### Frontend (`/client`)
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Animations**: Framer Motion
+- **State/Networking**: Axios, Socket.io Client
+
+### Backend (`/server`)
+- **Runtime**: Node.js
+- **Framework**: Express.js
+- **WhatsApp Library**: @whiskeysockets/baileys
+- **Database**: SQLite (better-sqlite3)
+- **AI**: OpenAI API
+- **Real-time**: Socket.io
+
+## 🏁 Getting Started
+
+### Prerequisites
+- Node.js (v18+ recommended)
+- npm or yarn
+
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd waas
+```
+
+### 2. Backend Setup
+Navigate to the server directory, install dependencies, and configure the environment.
+
+```bash
+cd server
+npm install
+```
+
+Create a `.env` file based on the example:
+```bash
+cp .env.example .env
+```
+> **Note:** You must provide a valid `OPENAI_API_KEY` in the `.env` file for AI features to work.
+
+Start the backend server:
+```bash
+npm start
+# OR for development with nodemon
+npm run dev
+```
+The server will start on `http://localhost:4000` (default).
+
+### 3. Frontend Setup
+Open a new terminal, navigate to the client directory, and install dependencies.
+
+```bash
+cd client
+npm install
+```
+
+Create a `.env.local` file based on the example:
+```bash
+cp .env.example .env.local
+```
+
+Start the frontend development server:
+```bash
+npm run dev
+```
+The application will be available at `http://localhost:3000`.
+
+## 📖 Usage Guide
+
+1.  **Register/Login**: Open the frontend and create a new account.
+2.  **Connect WhatsApp**:
+    *   Go to **Dashboard > Agents > Connect New Session**.
+    *   Scan the QR code using your WhatsApp mobile app (Linked Devices).
+    *   Wait for the connection to be established.
+3.  **Configure Agent**:
+    *   Once connected, create an Agent.
+    *   Select an AI model (e.g., GPT-4, GPT-3.5) and define the System Prompt (e.g., "You are a helpful support assistant").
+    *   Bind the agent to your active WhatsApp session.
+4.  **Test**: Send a message to the connected WhatsApp number from another phone. The AI agent should respond automatically.
+
+## 📂 Project Structure
+
+```
+waas/
+├── client/                 # Next.js Frontend
+│   ├── src/
+│   │   ├── app/            # App Router pages (Dashboard, Auth, etc.)
+│   │   ├── components/     # Reusable UI components
+│   │   └── lib/            # Utilities and API clients
+│   └── ...
+├── server/                 # Node.js Backend
+│   ├── src/
+│   │   ├── agents.js       # Agent logic
+│   │   ├── ai.js           # OpenAI integration
+│   │   ├── connectionManager.js # WhatsApp socket handling
+│   │   └── ...
+│   ├── data/               # SQLite database file
+│   └── ...
+└── README.md               # This file
+```
+
+## 🤝 Contributing
+Contributions are welcome! Please create issues for bugs or feature requests. Pull requests should be submitted against the `main` branch.
+
+## 📄 License
+MIT License.
