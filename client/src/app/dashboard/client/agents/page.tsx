@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Save, Bot, Sparkles, Zap, Brain } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Save, Bot, Sparkles, Zap, Brain, MessageSquare, Clock, Phone, Activity, QrCode } from "lucide-react";
 import { motion } from "framer-motion";
 
 const models = [
@@ -28,13 +29,48 @@ const models = [
   }
 ];
 
+const initialSessions = [
+  {
+    id: "sess_001",
+    phoneNumber: "+1 (555) 123-4567",
+    status: "active",
+    lastActive: "Just now",
+    messageCount: 24,
+    platform: "WhatsApp",
+    isEnabled: true,
+    excludedNumbers: ""
+  },
+  {
+    id: "sess_002",
+    phoneNumber: "+1 (555) 987-6543",
+    status: "idle",
+    lastActive: "5 mins ago",
+    messageCount: 12,
+    platform: "WhatsApp",
+    isEnabled: true,
+    excludedNumbers: ""
+  },
+  {
+    id: "sess_003",
+    phoneNumber: "+44 20 7123 4567",
+    status: "active",
+    lastActive: "1 min ago",
+    messageCount: 8,
+    platform: "WhatsApp",
+    isEnabled: false,
+    excludedNumbers: ""
+  }
+];
+
 export default function AgentsPage() {
+  const router = useRouter();
   const [selectedModel, setSelectedModel] = useState("gpt-4-turbo");
   const [systemPrompt, setSystemPrompt] = useState(
     "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
   );
   const [isSaving, setIsSaving] = useState(false);
-
+  const [sessions, setSessions] = useState(initialSessions);
+  
   const handleSave = async () => {
     setIsSaving(true);
     // Simulate API call
@@ -42,104 +78,104 @@ export default function AgentsPage() {
     setIsSaving(false);
   };
 
+  const handleOpenConnectPage = () => {
+    router.push('/dashboard/client/agents/connect');
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Agent Configuration</h1>
-          <p className="text-zinc-500 dark:text-zinc-400">
-            Customize how your AI agent behaves and interacts with customers.
-          </p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {isSaving ? "Saving..." : "Save Changes"}
-          {!isSaving && <Save className="h-4 w-4" />}
-        </button>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Model Selection */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
-        >
-          <div className="mb-4 flex items-center gap-2">
-            <Bot className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold">AI Model</h2>
-          </div>
-          
-          <div className="space-y-4">
-            {models.map((model) => (
-              <label
-                key={model.id}
-                className={`relative flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition-all ${
-                  selectedModel === model.id
-                    ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-900/10 dark:border-indigo-500"
-                    : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="model"
-                  value={model.id}
-                  checked={selectedModel === model.id}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{model.name}</span>
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                      {model.provider}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    {model.description}
-                  </p>
-                </div>
-                <model.icon className={`h-5 w-5 ${
-                  selectedModel === model.id ? "text-indigo-600" : "text-zinc-400"
-                }`} />
-              </label>
-            ))}
-          </div>
-        </motion.div>
 
-        {/* System Prompt */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
-        >
-          <div className="mb-4 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-semibold">System Prompt</h2>
-          </div>
-          
-          <div className="h-full">
-            <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-              Define the personality, tone, and constraints for your agent.
-            </p>
-            <textarea
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              className="h-[300px] w-full rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-800 dark:bg-black dark:text-zinc-200"
-              placeholder="You are a helpful assistant..."
-            />
-            <div className="mt-2 flex justify-end">
-              <span className="text-xs text-zinc-400">
-                {systemPrompt.length} characters
-              </span>
+      {/* Active Sessions List */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-semibold">Active Sessions</h2>
             </div>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Current active WhatsApp connections with your AI agent.
+            </p>
           </div>
-        </motion.div>
-      </div>
+          <button
+            onClick={handleOpenConnectPage}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <QrCode className="h-4 w-4" />
+            Connect New Number
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-zinc-50/50 text-zinc-500 dark:bg-zinc-800/50">
+                <th className="px-6 py-3 font-medium">User</th>
+                <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-6 py-3 font-medium">Last Active</th>
+                <th className="px-6 py-3 font-medium">Messages</th>
+                <th className="px-6 py-3 font-medium">Platform</th>
+                <th className="px-6 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {sessions.map((session) => (
+                <tr key={session.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                  <td className="px-6 py-4 font-medium">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30">
+                        <Phone className="h-4 w-4" />
+                      </div>
+                      {session.phoneNumber}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      session.status === "active" 
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                    }`}>
+                      <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+                        session.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                      }`} />
+                      {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" />
+                      {session.lastActive}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-1.5">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {session.messageCount}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                    {session.platform}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => router.push(`/dashboard/client/agents/${session.id}`)}
+                      className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      Manage
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
     </div>
   );
 }
