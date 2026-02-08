@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Bot, Sparkles, Zap, Brain, MessageSquare, Clock, Phone, Activity, QrCode } from "lucide-react";
+import { Save, Bot, Sparkles, Zap, Brain, MessageSquare, Clock, Phone, Activity, QrCode, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import api from "@/lib/api";
 
 const models = [
   {
@@ -69,7 +70,23 @@ export default function AgentsPage() {
     "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
   );
   const [isSaving, setIsSaving] = useState(false);
-  const [sessions, setSessions] = useState(initialSessions);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      const response = await api.get('/sessions');
+      setSessions(response.data.sessions || []);
+    } catch (error) {
+      console.error("Failed to fetch sessions", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleSave = async () => {
     setIsSaving(true);
@@ -113,13 +130,27 @@ export default function AgentsPage() {
         </div>
         
         <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            </div>
+          ) : sessions.length === 0 ? (
+             <div className="flex flex-col items-center justify-center p-8 text-zinc-500">
+                <p>No active sessions found.</p>
+                <button
+                  onClick={handleOpenConnectPage}
+                  className="mt-4 text-indigo-600 hover:underline"
+                >
+                  Connect your first number
+                </button>
+             </div>
+          ) : (
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-zinc-50/50 text-zinc-500 dark:bg-zinc-800/50">
-                <th className="px-6 py-3 font-medium">User</th>
+                <th className="px-6 py-3 font-medium">Session ID / Agent</th>
                 <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Last Active</th>
-                <th className="px-6 py-3 font-medium">Messages</th>
+                <th className="px-6 py-3 font-medium">Created At</th>
                 <th className="px-6 py-3 font-medium">Platform</th>
                 <th className="px-6 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -132,35 +163,32 @@ export default function AgentsPage() {
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30">
                         <Phone className="h-4 w-4" />
                       </div>
-                      {session.phoneNumber}
+                      <div className="flex flex-col">
+                        <span>{session.id.slice(0, 8)}...</span>
+                        <span className="text-xs text-zinc-500">{session.agent_name || "No Agent"}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      session.status === "active" 
+                      session.status === "open" || session.status === "active"
                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                         : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
                     }`}>
                       <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                        session.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                        session.status === "open" || session.status === "active" ? "bg-green-500" : "bg-zinc-400"
                       }`} />
-                      {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                      {(session.status || "unknown").toUpperCase()}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
                     <div className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5" />
-                      {session.lastActive}
+                      {new Date(session.created_at).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    <div className="flex items-center gap-1.5">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      {session.messageCount}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    {session.platform}
+                    WhatsApp
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 
@@ -174,6 +202,7 @@ export default function AgentsPage() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </motion.div>
     </div>

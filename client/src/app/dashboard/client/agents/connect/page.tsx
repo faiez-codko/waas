@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { QrCode, Loader2, ArrowLeft, Smartphone, CheckCircle2, Shield, MessageSquare, Bot, Sparkles, Zap, Brain } from "lucide-react";
+import { QrCode, Loader2, ArrowLeft, Smartphone, CheckCircle2, Shield, MessageSquare, Bot, Sparkles, Zap, Brain, Type } from "lucide-react";
 import { motion } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
+import api from "@/lib/api";
 
 const models = [
   {
@@ -33,6 +35,8 @@ export default function ConnectAgentPage() {
   const router = useRouter();
   const [step, setStep] = useState<'qr' | 'config' | 'agent'>('qr');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   
   // Session Config
   const [config, setConfig] = useState({
@@ -42,22 +46,65 @@ export default function ConnectAgentPage() {
 
   // Agent Config
   const [agentConfig, setAgentConfig] = useState({
+    name: "My Agent",
     model: "gpt-4-turbo",
     systemPrompt: "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
   });
 
-  const simulateQrScan = () => {
-    setIsConnecting(true);
-    // Simulate connection delay
-    setTimeout(() => {
+  useEffect(() => {
+    // Initialize session creation on mount
+    createSession();
+  }, []);
+
+  const createSession = async () => {
+    try {
+      setIsConnecting(true);
+      const res = await api.post('/sessions', {}); // Create session without agent initially
+      setSessionId(res.data.id);
+      if (res.data.qr) {
+        setQrCode(res.data.qr);
+        pollStatus(res.data.id);
+      }
+    } catch (e) {
+      console.error("Failed to create session", e);
+    } finally {
       setIsConnecting(false);
-      setStep('config');
+    }
+  };
+
+  const pollStatus = (sid: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get(`/sessions/${sid}`);
+        if (res.data.status === 'open' || res.data.status === 'active') {
+          clearInterval(interval);
+          setStep('config');
+        }
+      } catch (e) {
+        // ignore errors during poll
+      }
     }, 2000);
   };
 
-  const handleFinish = () => {
-    // In a real app, you would save the session here
-    router.push('/dashboard/client/agents');
+  const handleFinish = async () => {
+    if (!sessionId) return;
+    try {
+      // 1. Create Agent
+      const agentRes = await api.post('/agents', {
+        name: agentConfig.name,
+        system_prompt: agentConfig.systemPrompt,
+        model: agentConfig.model
+      });
+      const agentId = agentRes.data.id;
+
+      // 2. Bind Agent to Session
+      await api.post(`/agents/${agentId}/bind-session`, { sessionId });
+
+      router.push('/dashboard/client/agents');
+    } catch (e) {
+      console.error("Failed to finish setup", e);
+      // Show error?
+    }
   };
 
   return (
@@ -165,6 +212,13 @@ export default function ConnectAgentPage() {
                         <Loader2 className="h-10 w-10 animate-spin" />
                         <span className="text-sm font-medium animate-pulse">Establishing connection...</span>
                       </div>
+                    ) : qrCode ? (
+                       <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg">
+                          <QRCodeSVG value={qrCode} size={256} level="H" includeMargin={true} />
+                          <p className="mt-4 text-xs text-zinc-500">
+                            Scan with WhatsApp
+                          </p>
+                       </div>
                     ) : (
                       <QrCode className="h-56 w-56 text-zinc-800 dark:text-zinc-200" />
                     )}
@@ -184,13 +238,13 @@ export default function ConnectAgentPage() {
                       <li>Point your phone camera at this screen</li>
                     </ol>
                   </div>
-
+                  
+                  {/* Manual trigger for testing/demo if polling is slow */}
                   <button
-                    onClick={simulateQrScan}
-                    disabled={isConnecting}
-                    className="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30"
+                    onClick={() => setStep('config')}
+                    className="w-full text-xs text-zinc-400 hover:text-indigo-600 underline"
                   >
-                    {isConnecting ? "Verifying..." : "I've Scanned the Code"}
+                    Skip (Dev Mode)
                   </button>
                 </div>
               </div>
@@ -274,6 +328,21 @@ export default function ConnectAgentPage() {
                 </div>
 
                 <div className="space-y-6">
+                  {/* Agent Name */}
+                  <div className="space-y-3">
+                    <label className="font-medium text-zinc-900 dark:text-zinc-100">Agent Name</label>
+                    <div className="relative">
+                      <Type className="absolute left-3 top-2.5 h-5 w-5 text-zinc-400" />
+                      <input
+                        type="text"
+                        value={agentConfig.name}
+                        onChange={(e) => setAgentConfig(prev => ({ ...prev, name: e.target.value }))}
+                        className="flex h-10 w-full rounded-md border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2 pl-10 text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all"
+                        placeholder="My Awesome Agent"
+                      />
+                    </div>
+                  </div>
+
                   {/* Model Selection */}
                   <div className="space-y-3">
                     <label className="font-medium text-zinc-900 dark:text-zinc-100">AI Model</label>

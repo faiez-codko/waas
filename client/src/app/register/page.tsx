@@ -2,10 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User, Check, Zap, Phone } from "lucide-react";
+import api from "@/lib/api";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -19,16 +22,16 @@ export default function RegisterPage() {
     setError(null);
     setIsLoading(true);
 
-    // Placeholder: call backend auth API
+    // Call backend auth API
     try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await api.post('/auth/register', { name, email, password });
       
-      console.log("register", { name, email, phone, password });
-      // In a real app, you would redirect here
-      // router.push('/onboarding');
-    } catch (err) {
-      setError("Failed to create account. Please try again.");
+      console.log("register success");
+      // Redirect to login page after successful registration
+      router.push('/login');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || "Failed to create account. Please try again.");
     } finally {
       setIsLoading(false);
     }

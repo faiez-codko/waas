@@ -78,4 +78,64 @@ router.post('/:id/bind-session', async (req,res)=>{
   }
 })
 
+// get single agent
+router.get('/:id', async (req,res)=>{
+  try{
+    const id = req.params.id
+    // verify ownership
+    const check = await db.pool.query('SELECT * FROM agents WHERE id=$1',[id])
+    if (!check.rows || !check.rows.length) return res.status(404).json({ error: 'not found' })
+    if (check.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const agent = check.rows[0]
+    
+    // get meta
+    const meta = await db.pool.query('SELECT system_prompt,model FROM agents_meta WHERE agent_id=$1',[id])
+    if (meta.rows && meta.rows.length) {
+      agent.system_prompt = meta.rows[0].system_prompt
+      agent.model = meta.rows[0].model
+    } else {
+      agent.system_prompt = null
+      agent.model = 'gpt-3.5-turbo'
+    }
+    
+    res.json({ agent })
+  }catch(e){
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// update agent
+router.patch('/:id', async (req,res)=>{
+  try{
+    const id = req.params.id
+    const { name, webhook_url, system_prompt, model } = req.body
+    
+    // verify ownership
+    const check = await db.pool.query('SELECT user_id FROM agents WHERE id=$1',[id])
+    if (!check.rows || !check.rows.length) return res.status(404).json({ error: 'not found' })
+    if (check.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    if (name) await db.pool.query('UPDATE agents SET name=$1 WHERE id=$2', [name, id])
+    if (webhook_url !== undefined) await db.pool.query('UPDATE agents SET webhook_url=$1 WHERE id=$2', [webhook_url, id])
+
+    if (system_prompt !== undefined || model !== undefined) {
+       // check if meta exists
+       const meta = await db.pool.query('SELECT agent_id FROM agents_meta WHERE agent_id=$1', [id])
+       if (meta.rows && meta.rows.length) {
+         if (system_prompt !== undefined) await db.pool.query('UPDATE agents_meta SET system_prompt=$1 WHERE agent_id=$2', [system_prompt, id])
+         if (model !== undefined) await db.pool.query('UPDATE agents_meta SET model=$1 WHERE agent_id=$2', [model, id])
+       } else {
+         await db.pool.query('INSERT INTO agents_meta(agent_id,system_prompt,model) VALUES($1,$2,$3)', [id, system_prompt||null, model||'gpt-3.5-turbo'])
+       }
+    }
+    
+    res.json({ ok: true })
+  }catch(e){
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 module.exports = router

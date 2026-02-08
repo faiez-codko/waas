@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import api from "@/lib/api";
 import { 
   ArrowLeft, 
   Save, 
@@ -26,7 +27,8 @@ import {
   Smile,
   Send,
   Mic,
-  User
+  User,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -39,18 +41,18 @@ const models = [
     icon: Sparkles
   },
   {
+    id: "gpt-3.5-turbo",
+    name: "GPT-3.5 Turbo",
+    provider: "OpenAI",
+    description: "Fast and cost-effective",
+    icon: Zap
+  },
+  {
     id: "claude-3-opus",
     name: "Claude 3 Opus",
     provider: "Anthropic",
     description: "Excel at reasoning and coding",
     icon: Brain
-  },
-  {
-    id: "gemini-pro",
-    name: "Gemini Pro",
-    provider: "Google",
-    description: "Fast and efficient for general tasks",
-    icon: Zap
   }
 ];
 
@@ -76,6 +78,26 @@ const mockMessages: Record<string, any[]> = {
   ]
 };
 
+interface SessionConfig {
+  isEnabled: boolean;
+  excludedNumbers: string;
+  model: string;
+  systemPrompt: string;
+}
+
+interface SessionData {
+  id: string;
+  phoneNumber: string;
+  status: string;
+  lastActive: string;
+  messageCount: number;
+  platform: string;
+  device: string;
+  batteryLevel: number;
+  agent_id: string | null;
+  config: SessionConfig;
+}
+
 export default function SessionDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -83,27 +105,76 @@ export default function SessionDetailsPage() {
   
   const [activeTab, setActiveTab] = useState<'overview' | 'chats'>('overview');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Mock Session Data
-  const [session, setSession] = useState({
+  // Session Data
+  const [session, setSession] = useState<SessionData>({
     id: sessionId,
-    phoneNumber: "+1 (555) 123-4567",
-    status: "active",
-    lastActive: "Just now",
-    messageCount: 124,
+    phoneNumber: "Loading...",
+    status: "unknown",
+    lastActive: "-",
+    messageCount: 0,
     platform: "WhatsApp",
-    device: "iPhone 14 Pro",
-    batteryLevel: 82,
+    device: "-",
+    batteryLevel: 0,
+    agent_id: null,
     config: {
       isEnabled: true,
       excludedNumbers: "",
-      model: "gpt-4-turbo",
-      systemPrompt: "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
+      model: "gpt-3.5-turbo",
+      systemPrompt: ""
     }
   });
+
+  useEffect(() => {
+    fetchSessionData();
+  }, [sessionId]);
+
+  const fetchSessionData = async () => {
+    try {
+      setIsLoading(true);
+      const res = await api.get(`/sessions/${sessionId}`);
+      const s = res.data.session;
+      
+      let agentConfig = {
+        model: "gpt-3.5-turbo",
+        systemPrompt: ""
+      };
+
+      if (s.agent_id) {
+         try {
+           const aRes = await api.get(`/agents/${s.agent_id}`);
+           const a = aRes.data.agent;
+           agentConfig = {
+             model: a.model || "gpt-3.5-turbo",
+             systemPrompt: a.system_prompt || ""
+           };
+         } catch (err) {
+           console.error("Failed to fetch agent details", err);
+         }
+      }
+
+      setSession({
+        ...session,
+        id: s.id,
+        status: s.status,
+        phoneNumber: s.id.slice(0, 12), // Placeholder using ID
+        lastActive: new Date(s.created_at).toLocaleString(), // Placeholder using created_at
+        agent_id: s.agent_id,
+        config: {
+          ...session.config,
+          ...agentConfig
+        }
+      });
+    } catch (e) {
+      console.error("Failed to fetch session", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -115,14 +186,26 @@ export default function SessionDetailsPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
+    try {
+      if (session.agent_id) {
+        await api.patch(`/agents/${session.agent_id}`, {
+          model: session.config.model,
+          system_prompt: session.config.systemPrompt
+        });
+        // refresh data
+        await fetchSessionData();
+      }
+    } catch (e) {
+      console.error("Failed to save", e);
+      alert("Failed to save changes");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDisconnect = () => {
     if (confirm("Are you sure you want to disconnect this session? This action cannot be undone.")) {
-      // Simulate disconnect
+      // In a real app, call API to disconnect
       router.push('/dashboard/client/agents');
     }
   };
@@ -138,6 +221,14 @@ export default function SessionDetailsPage() {
 
   const selectedContact = mockContacts.find(c => c.id === selectedChatId);
   const currentMessages = selectedChatId ? (mockMessages[selectedChatId] || []) : [];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
@@ -310,67 +401,72 @@ export default function SessionDetailsPage() {
                     </div>
                   </div>
 
-                  {/* Model Configuration */}
+                  {/* AI Configuration */}
                   <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-                    <h3 className="font-semibold mb-6 text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <div className="mb-6 flex items-center gap-2">
                       <Bot className="h-5 w-5 text-indigo-600" />
-                      Agent Intelligence
-                    </h3>
-                    
+                      <h2 className="font-semibold">AI Configuration</h2>
+                    </div>
+
                     <div className="space-y-6">
-                      <div className="space-y-3">
-                        <label className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI Model</label>
-                        <div className="grid gap-3 sm:grid-cols-1">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                          AI Model
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-3">
                           {models.map((model) => (
-                            <label
+                            <button
                               key={model.id}
-                              className={`relative flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${
+                              onClick={() => setSession(prev => ({
+                                ...prev,
+                                config: { ...prev.config, model: model.id }
+                              }))}
+                              className={`flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all ${
                                 session.config.model === model.id
-                                  ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-900/10 dark:border-indigo-500"
+                                  ? "border-indigo-600 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-900/20"
                                   : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
                               }`}
                             >
-                              <input
-                                type="radio"
-                                name="model"
-                                value={model.id}
-                                checked={session.config.model === model.id}
-                                onChange={(e) => setSession(prev => ({ 
-                                  ...prev, 
-                                  config: { ...prev.config, model: e.target.value } 
-                                }))}
-                                className="mt-1"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{model.name}</span>
-                                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                                    {model.provider}
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                                  {model.description}
-                                </p>
-                              </div>
                               <model.icon className={`h-5 w-5 ${
-                                session.config.model === model.id ? "text-indigo-600" : "text-zinc-400"
+                                session.config.model === model.id ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-500"
                               }`} />
-                            </label>
+                              <div>
+                                <div className={`text-sm font-medium ${
+                                  session.config.model === model.id ? "text-indigo-900 dark:text-indigo-100" : "text-zinc-900 dark:text-zinc-100"
+                                }`}>
+                                  {model.name}
+                                </div>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                  {model.provider}
+                                </div>
+                              </div>
+                            </button>
                           ))}
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <label className="text-sm font-medium text-zinc-900 dark:text-zinc-100">System Prompt</label>
-                        <textarea
-                          value={session.config.systemPrompt}
-                          onChange={(e) => setSession(prev => ({ 
-                            ...prev, 
-                            config: { ...prev.config, systemPrompt: e.target.value } 
-                          }))}
-                          className="h-40 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-800 dark:bg-zinc-800/50 transition-all"
-                          placeholder="You are a helpful assistant..."
-                        />
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                          System Prompt
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            value={session.config.systemPrompt}
+                            onChange={(e) => setSession(prev => ({
+                              ...prev,
+                              config: { ...prev.config, systemPrompt: e.target.value }
+                            }))}
+                            rows={6}
+                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                            placeholder="Define how the AI should behave..."
+                          />
+                          <div className="absolute bottom-2 right-2 text-xs text-zinc-400">
+                            {session.config.systemPrompt.length} chars
+                          </div>
+                        </div>
+                        <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                          This prompt defines the personality and behavior of your AI agent.
+                        </p>
                       </div>
                     </div>
                   </div>

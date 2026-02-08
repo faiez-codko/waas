@@ -1,8 +1,18 @@
 require('dotenv').config()
 const express = require('express')
+const cors = require('cors')
 const bodyParser = require('body-parser')
 
 const app = express()
+app.use(cors({
+  origin: '*', // Allow ALL origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: false // Disable credentials to allow wildcard origin
+}))
+// Enable pre-flight for all routes
+app.options('*', cors())
+
 app.use(bodyParser.json())
 
 const db = require('./src/db')
@@ -126,12 +136,76 @@ app.post('/sessions', auth.verifyToken, async (req, res) => {
   }
 })
 
+// list user sessions - authenticated
+app.get('/sessions', auth.verifyToken, async (req, res) => {
+  try {
+    // Join with agents table to get agent name if needed
+    const r = await db.pool.query(`
+      SELECT s.id, s.status, s.created_at, s.agent_id, a.name as agent_name 
+      FROM sessions s 
+      LEFT JOIN agents a ON s.agent_id = a.id 
+      WHERE s.user_id=$1 
+      ORDER BY s.created_at DESC
+    `, [req.user.sub])
+    
+    // Enrich with live status from manager if available
+    const sessions = r.rows.map(row => {
+      const liveStatus = manager.getSessionStatus(row.id)
+      return { ...row, status: liveStatus || row.status }
+    })
+    
+    res.json({ sessions })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // get session status - authenticated
 app.get('/sessions/:id', auth.verifyToken, async (req, res) => {
   try{
-    const status = manager.getSessionStatus(req.params.id)
-    res.json({ status })
+    const id = req.params.id
+    // get from db to verify ownership
+    const r = await db.pool.query('SELECT * FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const session = r.rows[0]
+    const liveStatus = manager.getSessionStatus(id)
+    
+    // get agent name if attached
+    if (session.agent_id) {
+      const a = await db.pool.query('SELECT name FROM agents WHERE id=$1', [session.agent_id])
+      if (a.rows && a.rows.length) session.agent_name = a.rows[0].name
+    }
+
+    res.json({ session: { ...session, status: liveStatus || session.status } })
   }catch(e){
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// get user profile
+app.get('/me', auth.verifyToken, async (req, res) => {
+  try {
+    const r = await db.pool.query('SELECT id, email, name, created_at FROM users WHERE id=$1', [req.user.sub])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'User not found' })
+    res.json({ user: r.rows[0] })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// update user profile
+app.patch('/me', auth.verifyToken, async (req, res) => {
+  try {
+    const { name, email } = req.body
+    if (name) await db.pool.query('UPDATE users SET name=$1 WHERE id=$2', [name, req.user.sub])
+    if (email) await db.pool.query('UPDATE users SET email=$1 WHERE id=$2', [email, req.user.sub])
+    res.json({ ok: true })
+  } catch (e) {
     console.error(e)
     res.status(500).json({ error: e.message })
   }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 import { 
   User, 
   Settings, 
@@ -26,11 +27,11 @@ export default function UserSettingsPage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'notifications' | 'security'>('profile');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mock User Data
+  // User Data
   const [user, setUser] = useState({
-    name: "Faiez",
-    email: "faiez@example.com",
-    phone: "+1 (555) 000-0000",
+    name: "",
+    email: "",
+    phone: "",
     avatar: "https://github.com/shadcn.png",
     language: "en",
     timezone: "UTC-5",
@@ -46,11 +47,39 @@ export default function UserSettingsPage() {
     }
   });
 
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get('/me');
+      if (res.data.user) {
+        setUser(prev => ({ 
+          ...prev, 
+          name: res.data.user.name, 
+          email: res.data.user.email,
+          // created_at is available but not used in UI yet
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch user", error);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
+    try {
+      await api.patch('/me', {
+        name: user.name,
+        email: user.email
+      });
+      // Optionally show success toast
+    } catch (error) {
+      console.error("Failed to save settings", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const tabs = [

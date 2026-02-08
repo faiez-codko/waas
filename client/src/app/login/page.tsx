@@ -3,9 +3,12 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, CheckCircle } from "lucide-react";
+import api from "@/lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,16 +20,21 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
 
-    // Placeholder: call backend auth API
+    // Call backend auth API
     try {
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await api.post('/auth/login', { email, password });
       
-      console.log("login", { email, password });
-      // In a real app, you would redirect here
-      // router.push('/dashboard');
-    } catch (err) {
-      setError("Failed to login. Please check your credentials.");
+      console.log("login success", response.data);
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        router.push('/dashboard');
+      } else {
+         setError("Login failed: No token received");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.error || "Failed to login. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }
