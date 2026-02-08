@@ -1,16 +1,24 @@
-Goal: Create a GitHub repo and push local waas project to it.
+Goal: Start working on the frontend repository for the waas project (client folder).
 
 Phases:
-- [x] Prepare environment (git config, gh auth)
-- [ ] Create remote repository
-- [ ] Add remote and push
+- [x] Discovery: clarify requirements, tech stack, assets, APIs, and timeline
+- [x] Setup: scaffold project, install dependencies, initialize repo/branches
+- [ ] Implement MVP: core screens, routing, API integration, state management
+  - [ ] Backend: fix server syntax errors
+  - [x] Landing page
+  - [ ] Pricing page
+  - [ ] Login / Register
+- [ ] Review & QA: code review, basic tests, cross-browser checks
+- [ ] Docs & Deploy: README, deployment pipeline, preview URL
 
-Status: In progress - waiting for valid GitHub token or remote URL
+Status: Implementing pages: pricing, login, and register.
 
-Errors:
-- gh repo create failed: provided PAT lacks repository creation permission (GraphQL: Resource not accessible by personal access token)
-- git push failed due to missing remote auth (fatal: could not read Username for 'https://github.com')
+Log: Adding pricing, login, and register pages; updating header navigation.
 
-Notes:
-- A temporary token file was created at /tmp/gh_token.txt and securely deleted after use.
-- Next steps: provide a PAT with repo creation scope or create the repo manually on GitHub and share the repository URL (or give SSH access). Then I will add remote and push the repository.
+Next actions:
+- Create pricing page at /pricing
+- Create login page at /login (client-side form)
+- Create register page at /register (client-side form)
+- Commit and push changes
+
+Errors: None so far.

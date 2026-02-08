@@ -1,8 +1,6 @@
 require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
-const { ConnectionManager } = require('./src/connectionManager')
-const ai = require('./src/ai')
 
 const app = express()
 app.use(bodyParser.json())
@@ -18,16 +16,15 @@ const manager = ConnectionManagerInstance
 // init db
 db.init().catch(console.error)
 
-
 app.get('/health', (req, res) => res.json({ ok: true }))
 
 // admin-only listing of all sessions
 app.use('/admin', auth.verifyToken, auth.requireRole('admin'), require('./src/admin'))
 
-// create agent (a user-level webhook/agent tied to a user)
+// mount agents router (standard CRUD for agents)
 app.use('/agents', auth.verifyToken, require('./src/agents'))
 
-// legacy route (create agent) kept for compatibility
+// legacy route (create agent) kept for compatibility - POST /agents
 app.post('/agents', auth.verifyToken, async (req,res)=>{
   try{
     const { name, webhook_url, system_prompt, model } = req.body
@@ -40,34 +37,12 @@ app.post('/agents', auth.verifyToken, async (req,res)=>{
         const p = sub.rows[0]
         if (p.max_agents){
           const used = await db.pool.query('SELECT COUNT(*) as cnt FROM agents WHERE user_id=$1',[userId])
-          const cnt = used.rows && used.rows[0] ? used.rows[0].cnt : 0
+          const cnt = used.rows && used.rows[0] ? Number(used.rows[0].cnt) : 0
           if (cnt >= p.max_agents) return res.status(403).json({ error: 'agent limit reached for your plan' })
         }
       }
     }catch(e){ console.error('plan check failed', e && e.message) }
 
-    const id = require('uuid').v4()
-    await db.pool.query('INSERT INTO agents(id,user_id,name,webhook_url) VALUES($1,$2,$3,$4)',[id,req.user.sub,name,webhook_url])
-    res.json({ id, name, webhook_url })
-  }catch(e){
-    console.error(e)
-    res.status(500).json({ error: e.message })
-  }
-}) // required: creates agent and enforces plan limits
-  try{
-    const router = require('./src/agents')
-    // delegate to router's POST /
-    app.use('/_tmp_agents_delegate', auth.verifyToken, require('./src/agents'))
-    // forward request
-    req.url = '/'
-    return router.handle(req,res)
-  }catch(e){
-    console.error(e)
-    res.status(500).json({ error: e.message })
-  }
-})
-  try{
-    const { name, webhook_url } = req.body
     const id = require('uuid').v4()
     await db.pool.query('INSERT INTO agents(id,user_id,name,webhook_url) VALUES($1,$2,$3,$4)',[id,req.user.sub,name,webhook_url])
     res.json({ id, name, webhook_url })
@@ -97,14 +72,12 @@ app.get('/admin/sessions', auth.verifyToken, auth.requireRole('admin'), async (r
   }
 })
 
-
 // auth routes
 app.use('/subscriptions', auth.verifyToken, require('./src/subscriptions'))
 
 // admin endpoints for plan management
 app.get('/admin/plans', auth.verifyToken, auth.requireRole('admin'), async (req,res)=>{
   try{
-    const db = require('./src/db')
     const r = await db.pool.query('SELECT id,name,max_sessions,max_agents,max_messages,max_chats FROM plans')
     res.json({ plans: r.rows })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
@@ -113,7 +86,6 @@ app.get('/admin/plans', auth.verifyToken, auth.requireRole('admin'), async (req,
 app.post('/admin/plans', auth.verifyToken, auth.requireRole('admin'), async (req,res)=>{
   try{
     const { id,name,max_sessions,max_agents,max_messages,max_chats } = req.body
-    const db = require('./src/db')
     const pid = id || require('uuid').v4()
     await db.pool.query('INSERT OR REPLACE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats) VALUES($1,$2,$3,$4,$5,$6)',[pid,name,max_sessions,max_agents,max_messages,max_chats])
     res.json({ ok:true, id:pid })
@@ -142,8 +114,7 @@ app.post('/auth/login', async (req,res)=>{
   }
 })
 
-
-// create a session (returns session id and qr)
+// create a session (returns session id and qr) - authenticated
 app.post('/sessions', auth.verifyToken, async (req, res) => {
   try {
     const { agentId } = req.body
@@ -155,26 +126,15 @@ app.post('/sessions', auth.verifyToken, async (req, res) => {
   }
 })
 
-// get session status
+// get session status - authenticated
 app.get('/sessions/:id', auth.verifyToken, async (req, res) => {
-  const status = manager.getSessionStatus(req.params.id)
-  res.json({ status })
-})
-
-app.post('/sessions', async (req, res) => {
-  try {
-    const session = await manager.createSession()
-    res.json(session)
-  } catch (e) {
+  try{
+    const status = manager.getSessionStatus(req.params.id)
+    res.json({ status })
+  }catch(e){
     console.error(e)
     res.status(500).json({ error: e.message })
   }
-})
-
-// get session status
-app.get('/sessions/:id', async (req, res) => {
-  const status = manager.getSessionStatus(req.params.id)
-  res.json({ status })
 })
 
 const port = process.env.PORT || 4000
