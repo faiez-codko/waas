@@ -164,17 +164,17 @@ export default function AgentsPage() {
                           <Phone className="h-4 w-4" />
                         </div>
                         <div className="flex flex-col">
-                          <span>{session.id.slice(0, 8)}...</span>
-                          <span className="text-xs text-zinc-500">{session.agent_name || "No Agent"}</span>
+                          <span >{session.agent_name || "No Agent"}</span>
+                          <span className="text-xs text-zinc-500" >{session.id.slice(0, 8)}...</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${session.status === "open" || session.status === "active"
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${session.status.status === "open" || session.status.status === "active"
                           ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                           : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
                         }`}>
-                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status === "open" || session.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status.status === "open" || session.status.status === "active" ? "bg-green-500" : "bg-zinc-400"
                           }`} />
                         {(session.status.status || "unknown")}
                       </span>

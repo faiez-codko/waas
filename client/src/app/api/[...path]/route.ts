@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000";
 
-async function proxy(request: Request, { params }: { params: { path: string[] } }) {
+async function proxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");
   const url = new URL(request.url);
   const searchParams = url.search;

@@ -1,12 +1,113 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { QrCode, Loader2, ArrowLeft, Smartphone, CheckCircle2, Shield, MessageSquare, Bot, Sparkles, Zap, Brain, Type } from "lucide-react";
-import { motion } from "framer-motion";
+import { QrCode, Loader2, ArrowLeft, Smartphone, CheckCircle2, Shield, MessageSquare, Bot, Sparkles, Zap, Brain, Type, AlertTriangle, XCircle, RefreshCw, X, WifiOff } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import api from "@/lib/api";
 import { io } from "socket.io-client";
+
+
+// --- Error Handling System ---
+
+type ErrorSeverity = 'error' | 'warning';
+type ErrorType = 'network' | 'validation' | 'api' | 'unknown';
+
+interface AppError {
+  message: string;
+  type: ErrorType;
+  severity: ErrorSeverity;
+  retry?: () => void;
+}
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/20 dark:bg-red-900/10" role="alert">
+          <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
+          <h3 className="text-lg font-semibold text-red-700 dark:text-red-400">Something went wrong</h3>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-300 max-w-md">
+            {this.state.error?.message || "An unexpected error occurred while loading this page."}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            className="mt-6 flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors shadow-sm"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Custom Hook for Error Management
+const useError = () => {
+  const [error, setError] = useState<AppError | null>(null);
+
+  const handleError = (e: any, retry?: () => void) => {
+    let message = "An unexpected error occurred.";
+    let type: ErrorType = 'unknown';
+
+    // Network Errors
+    if (e.message === 'Network Error' || e.code === 'ERR_NETWORK' || !window.navigator.onLine) {
+      message = "Network error. Please check your internet connection.";
+      type = 'network';
+    } 
+    // API Errors
+    else if (e.response) {
+      message = e.response.data?.error || `Server error (${e.response.status})`;
+      type = 'api';
+    } 
+    // Validation Errors (Custom)
+    else if (e.type === 'validation') {
+       message = e.message;
+       type = 'validation';
+    }
+    else if (e.message) {
+      message = e.message;
+    }
+
+    setError({ 
+      message, 
+      type, 
+      severity: 'error',
+      retry 
+    });
+    
+    // Log for debugging (excluding PII if possible)
+    console.error(`[AppError][${type}]`, e);
+  };
+
+  const clearError = () => setError(null);
+
+  return { error, handleError, clearError };
+};
+
 
 const models = [
   {
@@ -34,6 +135,7 @@ const models = [
 
 export default function ConnectAgentPage() {
   const router = useRouter();
+  const { error, handleError, clearError } = useError();
   const [step, setStep] = useState<'qr' | 'config' | 'agent'>('qr');
   const [isConnecting, setIsConnecting] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -48,7 +150,7 @@ export default function ConnectAgentPage() {
   // Agent Config
   const [agentConfig, setAgentConfig] = useState({
     name: "My Agent",
-    model: "gpt-4-turbo",
+    model: "openai",
     systemPrompt: "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
   });
 
@@ -90,6 +192,7 @@ export default function ConnectAgentPage() {
   }, [sessionId]);
 
   const createSession = async () => {
+    clearError();
     try {
       setIsConnecting(true);
       const res = await api.post('/sessions', {}); // Create session without agent initially
@@ -98,8 +201,8 @@ export default function ConnectAgentPage() {
         setQrCode(res.data.qr);
       }
       // pollStatus(res.data.id); // Disabled in favor of WebSockets
-    } catch (e) {
-      console.error("Failed to create session", e);
+    } catch (e: any) {
+      handleError(e, createSession);
     } finally {
       setIsConnecting(false);
     }
@@ -129,7 +232,11 @@ export default function ConnectAgentPage() {
 
   const handleFinish = async () => {
     if (!sessionId) return;
+    clearError();
+    
     try {
+      if (!agentConfig.name.trim()) throw { type: 'validation', message: "Agent name is required" };
+      
       // 1. Create Agent
       const agentRes = await api.post('/agents', {
         name: agentConfig.name,
@@ -142,13 +249,13 @@ export default function ConnectAgentPage() {
       await api.post(`/agents/${agentId}/bind-session`, { sessionId });
 
       router.push('/dashboard/client/agents');
-    } catch (e) {
-      console.error("Failed to finish setup", e);
-      // Show error?
+    } catch (e: any) {
+      handleError(e);
     }
   };
 
   return (
+    <ErrorBoundary>
     <div className="max-w-5xl mx-auto space-y-8 py-8">
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -245,6 +352,7 @@ export default function ConnectAgentPage() {
           >
             {step === 'qr' && (
               <div className="flex flex-col items-center justify-center space-y-8 py-4">
+
                 <div className="relative">
                   <div className="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 opacity-20 blur-lg" />
                   <div className="relative flex h-72 w-72 items-center justify-center rounded-xl bg-white border-2 border-dashed border-zinc-200 dark:bg-black dark:border-zinc-700">
@@ -464,5 +572,6 @@ export default function ConnectAgentPage() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }
