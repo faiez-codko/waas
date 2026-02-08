@@ -5,9 +5,23 @@ const db = require('./db')
 // list available plans (public)
 router.get('/plans', async (req,res)=>{
   try{
-    const r = await db.pool.query('SELECT id,name,max_sessions,max_agents,max_messages,max_chats FROM plans')
+    const r = await db.pool.query('SELECT id,name,price_monthly,max_sessions,max_agents,max_messages,max_chats,description,features FROM plans')
     res.json({ plans: r.rows })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+// get current user's billing history (invoices)
+router.get('/invoices', async (req, res) => {
+  try {
+    const userId = req.user.sub
+    // for now we return mock data or from invoices table if populated
+    // assuming invoices table exists
+    const r = await db.pool.query('SELECT id, period_start, amount, status FROM invoices WHERE user_id=$1 ORDER BY period_start DESC', [userId])
+    res.json({ invoices: r.rows })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // subscribe current user to a plan (admin can pass userId)

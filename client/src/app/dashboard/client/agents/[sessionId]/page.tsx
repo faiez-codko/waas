@@ -195,14 +195,40 @@ export default function SessionDetailsPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      if (session.agent_id) {
-        await api.patch(`/agents/${session.agent_id}`, {
-          model: session.config.model,
-          system_prompt: session.config.systemPrompt
-        });
-        // refresh data
-        await fetchSessionData();
+      if (session.config.isEnabled) {
+        if (session.agent_id) {
+          // Update existing agent
+          await api.patch(`/agents/${session.agent_id}`, {
+            model: session.config.model,
+            system_prompt: session.config.systemPrompt
+          });
+        } else {
+          // Create new agent
+          const newAgentRes = await api.post('/agents', {
+            name: `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
+            model: session.config.model,
+            system_prompt: session.config.systemPrompt,
+            webhook_url: ""
+          });
+          const newAgentId = newAgentRes.data.id;
+          
+          // Bind to session
+          await api.patch(`/sessions/${sessionId}`, {
+            agent_id: newAgentId
+          });
+        }
+      } else {
+        // Disabled - unbind agent if one exists
+        if (session.agent_id) {
+          await api.patch(`/sessions/${sessionId}`, {
+            agent_id: null
+          });
+        }
       }
+      
+      // refresh data
+      await fetchSessionData();
+      alert("Changes saved successfully");
     } catch (e) {
       console.error("Failed to save", e);
       alert("Failed to save changes");

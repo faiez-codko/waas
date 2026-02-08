@@ -1,55 +1,82 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Check } from "lucide-react";
+import api from "@/lib/api";
 
-const plans = [
-  {
-    name: "Starter",
-    price: "$29",
-    period: "/month",
-    description: "Perfect for small businesses just getting started.",
-    features: [
-      "1,000 Messages / month",
-      "1 Agent",
-      "Basic Support",
-      "Standard Response Time"
-    ],
-    current: false,
-    buttonText: "Downgrade"
-  },
-  {
-    name: "Pro",
-    price: "$79",
-    period: "/month",
-    description: "Ideal for growing teams with higher volume needs.",
-    features: [
-      "10,000 Messages / month",
-      "5 Agents",
-      "Priority Support",
-      "Advanced Analytics",
-      "Custom System Prompts"
-    ],
-    current: true,
-    buttonText: "Current Plan"
-  },
-  {
-    name: "Enterprise",
-    price: "$199",
-    period: "/month",
-    description: "For large scale operations requiring maximum power.",
-    features: [
-      "Unlimited Messages",
-      "Unlimited Agents",
-      "24/7 Dedicated Support",
-      "SLA Guarantee",
-      "Custom Model Fine-tuning"
-    ],
-    current: false,
-    buttonText: "Upgrade"
-  }
-];
+interface Plan {
+  id: string;
+  name: string;
+  price_monthly: number;
+  max_sessions: number;
+  max_agents: number;
+  max_messages: number;
+  max_chats: number;
+  description: string;
+  features: string; // JSON string or comma-separated
+}
+
+interface Subscription {
+  id: string;
+  plan_id: string;
+  period_start: string;
+  period_end: string;
+  status: string;
+}
+
+interface Invoice {
+  id: string;
+  period_start: string;
+  amount: number;
+  status: string;
+}
 
 export default function SubscriptionPage() {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [plansRes, subRes, invRes] = await Promise.all([
+        api.get('/subscriptions/plans'),
+        api.get('/subscriptions/me'),
+        api.get('/subscriptions/invoices')
+      ]);
+
+      setPlans(plansRes.data.plans);
+      setSubscription(subRes.data.subscription);
+      setInvoices(invRes.data.invoices || []);
+    } catch (e) {
+      console.error("Failed to fetch subscription data", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePlanAction = async (planId: string) => {
+     // TODO: Implement upgrade/downgrade logic
+     alert(`Plan selection for ${planId} clicked. Upgrade flow to be implemented.`);
+  };
+
+  const parseFeatures = (features: string) => {
+    if (!features) return [];
+    try {
+      return JSON.parse(features);
+    } catch {
+      return features.split(',').map(f => f.trim());
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-zinc-500">Loading subscription details...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -62,56 +89,75 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <div
-            key={plan.name}
-            className={`relative flex flex-col rounded-2xl border p-6 shadow-sm ${
-              plan.current
-                ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-500 ring-1 ring-indigo-600 dark:ring-indigo-500"
-                : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-            }`}
-          >
-            {plan.current && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white">
-                Current Plan
-              </div>
-            )}
-            
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold">{plan.name}</h3>
-              <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold">{plan.price}</span>
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {plan.period}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                {plan.description}
-              </p>
-            </div>
+        {plans.map((plan) => {
+          const isCurrent = subscription?.plan_id === plan.id;
+          const featuresList = parseFeatures(plan.features);
 
-            <ul className="mb-6 flex-1 space-y-3">
-              {plan.features.map((feature) => (
-                <li key={feature} className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-indigo-600" />
-                  <span className="text-zinc-600 dark:text-zinc-300">
-                    {feature}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            <button
-              className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
-                plan.current
-                  ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                  : "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-700"
+          return (
+            <div
+              key={plan.id}
+              className={`relative flex flex-col rounded-2xl border p-6 shadow-sm ${
+                isCurrent
+                  ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/10 dark:border-indigo-500 ring-1 ring-indigo-600 dark:ring-indigo-500"
+                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
               }`}
             >
-              {plan.buttonText}
-            </button>
-          </div>
-        ))}
+              {isCurrent && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white">
+                  Current Plan
+                </div>
+              )}
+              
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold">{plan.name}</h3>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-3xl font-bold">${plan.price_monthly}</span>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    /month
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  {plan.description}
+                </p>
+              </div>
+
+              <ul className="mb-6 flex-1 space-y-3">
+                <li className="flex items-center gap-2 text-sm">
+                   <Check className="h-4 w-4 text-indigo-600" />
+                   <span className="text-zinc-600 dark:text-zinc-300">{plan.max_messages} Messages / mo</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                   <Check className="h-4 w-4 text-indigo-600" />
+                   <span className="text-zinc-600 dark:text-zinc-300">{plan.max_agents} Agents</span>
+                </li>
+                 <li className="flex items-center gap-2 text-sm">
+                   <Check className="h-4 w-4 text-indigo-600" />
+                   <span className="text-zinc-600 dark:text-zinc-300">{plan.max_sessions} Sessions</span>
+                </li>
+                {featuresList.map((feature: string, idx: number) => (
+                  <li key={idx} className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 text-indigo-600" />
+                    <span className="text-zinc-600 dark:text-zinc-300">
+                      {feature}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                onClick={() => handlePlanAction(plan.id)}
+                disabled={isCurrent}
+                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  isCurrent
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 opacity-50 cursor-default"
+                    : "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-700"
+                }`}
+              >
+                {isCurrent ? "Current Plan" : "Upgrade"}
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-8 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -128,27 +174,29 @@ export default function SubscriptionPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {[
-                { id: "INV-001", date: "Oct 1, 2023", amount: "$79.00", status: "Paid" },
-                { id: "INV-002", date: "Sep 1, 2023", amount: "$79.00", status: "Paid" },
-                { id: "INV-003", date: "Aug 1, 2023", amount: "$29.00", status: "Paid" },
-              ].map((invoice) => (
-                <tr key={invoice.id}>
-                  <td className="py-3 font-medium">{invoice.id}</td>
-                  <td className="py-3 text-zinc-500 dark:text-zinc-400">{invoice.date}</td>
-                  <td className="py-3 text-zinc-500 dark:text-zinc-400">{invoice.amount}</td>
-                  <td className="py-3">
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      {invoice.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">
-                    <button className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
-                      PDF
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {invoices.length === 0 ? (
+                 <tr>
+                    <td colSpan={5} className="py-4 text-center text-zinc-500">No invoices found</td>
+                 </tr>
+              ) : (
+                invoices.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td className="py-3 font-medium">{invoice.id.slice(0, 8)}...</td>
+                    <td className="py-3 text-zinc-500 dark:text-zinc-400">{new Date(invoice.period_start).toLocaleDateString()}</td>
+                    <td className="py-3 text-zinc-500 dark:text-zinc-400">${invoice.amount}</td>
+                    <td className="py-3">
+                      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        {invoice.status || 'Paid'}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
+                        PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

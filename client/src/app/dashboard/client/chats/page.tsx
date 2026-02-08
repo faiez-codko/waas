@@ -1,58 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MoreVertical, MessageSquare, Clock, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, User } from "lucide-react";
+import api from "@/lib/api";
 
-const chats = [
-  {
-    id: 1,
-    customer: "Alice Smith",
-    phone: "+1 (555) 123-4567",
-    lastMessage: "I need help with my subscription plan.",
-    timestamp: "2 mins ago",
-    status: "active",
-    platform: "WhatsApp"
-  },
-  {
-    id: 2,
-    customer: "Bob Johnson",
-    phone: "+1 (555) 987-6543",
-    lastMessage: "Thanks for the quick response!",
-    timestamp: "1 hour ago",
-    status: "closed",
-    platform: "Telegram"
-  },
-  {
-    id: 3,
-    customer: "Carol White",
-    phone: "+1 (555) 456-7890",
-    lastMessage: "Is there an API documentation available?",
-    timestamp: "3 hours ago",
-    status: "active",
-    platform: "WhatsApp"
-  },
-  {
-    id: 4,
-    customer: "David Brown",
-    phone: "+1 (555) 789-0123",
-    lastMessage: "How do I change my payment method?",
-    timestamp: "1 day ago",
-    status: "closed",
-    platform: "WhatsApp"
-  },
-  {
-    id: 5,
-    customer: "Eva Green",
-    phone: "+1 (555) 321-6549",
-    lastMessage: "The bot is not responding correctly.",
-    timestamp: "2 days ago",
-    status: "active",
-    platform: "Telegram"
-  }
-];
+interface Chat {
+  id: string;
+  customer: string;
+  phone: string;
+  lastMessage: string;
+  timestamp: string;
+  status: string;
+  platform: string;
+  sessionId: string;
+  sessionName: string;
+}
+
+function timeAgo(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 export default function ChatsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchChats();
+  }, []);
+
+  const fetchChats = async () => {
+    try {
+      const res = await api.get('/client/chats');
+      setChats(res.data.chats);
+    } catch (e) {
+      console.error("Failed to fetch chats", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredChats = chats.filter(chat => 
+    chat.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    chat.phone.includes(searchTerm) ||
+    chat.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -80,48 +82,44 @@ export default function ChatsPage() {
         </div>
 
         <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {chats.map((chat) => (
-            <div
-              key={chat.id}
-              className="flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                  <User className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">{chat.customer}</h3>
-                    <span className="text-xs text-zinc-500">{chat.phone}</span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        chat.status === "active"
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                          : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                      }`}
-                    >
-                      {chat.status}
-                    </span>
+          {loading ? (
+             <div className="p-8 text-center text-zinc-500">Loading chats...</div>
+          ) : filteredChats.length === 0 ? (
+             <div className="p-8 text-center text-zinc-500">No chats found</div>
+          ) : (
+            filteredChats.map((chat) => (
+              <div
+                key={chat.id}
+                className="flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                    <User className="h-5 w-5" />
                   </div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {chat.lastMessage}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium">{chat.customer}</h3>
+                      <span className="text-xs text-zinc-500">{chat.phone}</span>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          chat.status === "active"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                        }`}
+                      >
+                        {chat.platform}
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-500 line-clamp-1">{chat.lastMessage}</p>
+                    <p className="text-xs text-zinc-400 mt-1">via {chat.sessionName}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-zinc-400">{timeAgo(chat.timestamp)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-zinc-500">
-                <div className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {chat.timestamp}
-                </div>
-                <div className="hidden sm:block rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium dark:bg-zinc-800">
-                  {chat.platform}
-                </div>
-                <button className="rounded p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

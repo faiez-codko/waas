@@ -272,6 +272,34 @@ app.delete('/sessions/:id', auth.verifyToken, async (req, res) => {
   }
 })
 
+// update session (e.g. bind/unbind agent)
+app.patch('/sessions/:id', auth.verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id
+    const { agent_id } = req.body
+    
+    // verify ownership
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    if (agent_id !== undefined) {
+      await db.pool.query('UPDATE sessions SET agent_id=$1 WHERE id=$2', [agent_id, id])
+      // update in-memory manager
+      if (manager.sessions.has(id)) {
+        const s = manager.sessions.get(id)
+        s.agentId = agent_id
+        manager.sessions.set(id, s)
+      }
+    }
+    
+    res.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // get user profile
 app.get('/me', auth.verifyToken, async (req, res) => {
   try {

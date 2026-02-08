@@ -95,4 +95,52 @@ router.get('/messages', async (req, res) => {
   }
 })
 
+// Get all chats across all sessions
+router.get('/chats', async (req, res) => {
+  try {
+    const userId = req.user.sub
+    
+    // Get last message per chat (session_id + to_jid)
+    const sql = `
+      SELECT 
+        m.to_jid, 
+        m.session_id, 
+        m.body, 
+        m.created_at, 
+        m.direction, 
+        s.phone_number as session_phone,
+        s.contact_name as session_name,
+        s.platform
+      FROM messages m
+      JOIN sessions s ON m.session_id = s.id
+      INNER JOIN (
+          SELECT session_id, to_jid, MAX(created_at) as max_created
+          FROM messages
+          GROUP BY session_id, to_jid
+      ) grouped_m ON m.session_id = grouped_m.session_id AND m.to_jid = grouped_m.to_jid AND m.created_at = grouped_m.max_created
+      WHERE s.user_id = $1
+      ORDER BY m.created_at DESC
+    `
+    
+    const r = await db.pool.query(sql, [userId])
+    
+    const chats = r.rows.map(row => ({
+      id: `${row.session_id}_${row.to_jid}`,
+      customer: row.to_jid.split('@')[0], // simplistic name extraction
+      phone: row.to_jid.split('@')[0],
+      lastMessage: row.body,
+      timestamp: row.created_at,
+      status: 'active', // TODO: infer from logic?
+      platform: row.platform || 'WhatsApp',
+      sessionId: row.session_id,
+      sessionName: row.session_name || row.session_phone
+    }))
+
+    res.json({ chats })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 module.exports = router

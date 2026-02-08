@@ -206,6 +206,7 @@ class ConnectionManager {
         if (!m || !m.messages || !m.messages.length) return
         const msg = m.messages[0]
         if (!msg.message) return
+        if (msg.key.fromMe) return
 
         // extract text
         let text = null
@@ -214,7 +215,7 @@ class ConnectionManager {
         else if (msg.message.extendedTextMessage && msg.message.extendedTextMessage.contextInfo && msg.message.extendedTextMessage.contextInfo.quotedMessage) text = JSON.stringify(msg.message.extendedTextMessage)
         if (!text) return
 
-        console.log('incoming text for session', id)
+        console.log('incoming text for session', id, 'from', msg.key.remoteJid, ':', text)
 
         // persist incoming message
         try{
@@ -226,7 +227,11 @@ class ConnectionManager {
         // find bound agent for this session
         // use passed agentId or fetch fresh from DB/memory
         const s = this.sessions.get(id) || {}
-        const currentAgentId = s.agentId || agentId
+        // prioritize s.agentId (which tracks live updates) over the closure variable agentId
+        // check if s.agentId is explicitly set (even to null)
+        let currentAgentId = s.agentId
+        if (currentAgentId === undefined) currentAgentId = agentId
+
         if (!currentAgentId) return
 
         // enforce plan usage and track usage
@@ -286,8 +291,15 @@ class ConnectionManager {
 
         // call AI
         try{
+          // indicate typing status
+          await sock.sendPresenceUpdate('composing', msg.key.remoteJid)
+
           const ai = require('./ai')
           const reply = await ai.chatCompletion({ model, systemPrompt, messages:[{ role: 'user', content: text }] })
+          
+          // stop typing status
+          await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
+
           if (reply) {
             await sock.sendMessage(msg.key.remoteJid, { text: reply })
             try{
@@ -296,7 +308,11 @@ class ConnectionManager {
               await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',[mid2,id,'out',msg.key.remoteJid,reply,JSON.stringify({ reply })])
             }catch(e){ console.error('persist outgoing failed', e && e.message) }
           }
-        }catch(e){ console.error('ai call failed', e && e.message) }
+        }catch(e){ 
+          console.error('ai call failed', e && e.message) 
+          // ensure we stop typing on error
+          await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
+        }
 
       }catch(e){ console.error('messages.upsert handler error', e && e.message) }
     })
