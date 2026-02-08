@@ -158,6 +158,25 @@ async function init() {
     }
   }catch(e){ console.error('migration failed', e && e.message) }
 
+  // migration: add status to subscriptions if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(subscriptions)").all()
+    const hasStatus = info.some(c=>c.name==='status')
+    if (!hasStatus){
+      db.exec("ALTER TABLE subscriptions ADD COLUMN status TEXT DEFAULT 'active'")
+    }
+  }catch(e){ console.error('sub migration failed', e && e.message) }
+
+  // migration: add description and features to plans if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(plans)").all()
+    const hasDesc = info.some(c=>c.name==='description')
+    if (!hasDesc){
+      db.exec("ALTER TABLE plans ADD COLUMN description TEXT")
+      db.exec("ALTER TABLE plans ADD COLUMN features TEXT")
+    }
+  }catch(e){ console.error('plans desc migration failed', e && e.message) }
+
   // seed plans (idempotent)
   try{
     const stmt = db.prepare("INSERT OR IGNORE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats,price_monthly) VALUES(?,?,?,?,?,?,?)")

@@ -2,6 +2,45 @@ const express = require('express')
 const router = express.Router()
 const db = require('./db')
 
+// get dashboard stats
+router.get('/stats', async (req,res)=>{
+  try{
+    const usersCount = await db.pool.query('SELECT COUNT(*) as count FROM users')
+    const activeSubs = await db.pool.query("SELECT COUNT(*) as count FROM subscriptions WHERE period_end > datetime('now')")
+    // Simple revenue calc: sum of plan prices for active subscriptions
+    // In a real app this would be more complex (invoices table)
+    const revenue = await db.pool.query(`
+      SELECT SUM(p.price_monthly) as total 
+      FROM subscriptions s 
+      JOIN plans p ON s.plan_id = p.id 
+      WHERE s.period_end > datetime('now')
+    `)
+    
+    res.json({
+      total_users: usersCount.rows[0].count,
+      active_subscriptions: activeSubs.rows[0].count,
+      monthly_revenue: revenue.rows[0].total || 0,
+      server_status: "Stable" // Mock status
+    })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+// list all subscriptions with details
+router.get('/subscriptions', async (req,res)=>{
+  try{
+    const r = await db.pool.query(`
+      SELECT s.id, s.user_id, s.plan_id, s.status, s.period_start, s.period_end, 
+             u.name as user_name, u.email as user_email, 
+             p.name as plan_name, p.price_monthly as amount 
+      FROM subscriptions s 
+      LEFT JOIN users u ON s.user_id = u.id 
+      LEFT JOIN plans p ON s.plan_id = p.id
+      ORDER BY s.created_at DESC
+    `)
+    res.json({ subscriptions: r.rows })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
 // list users
 router.get('/users', async (req,res)=>{
   try{
@@ -109,6 +148,63 @@ router.put('/invoices/:id', async (req,res)=>{
 router.delete('/invoices/:id', async (req,res)=>{
   try{
     await db.pool.query('DELETE FROM invoices WHERE id=$1',[req.params.id])
+    res.json({ ok:true })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+// plans CRUD
+router.get('/plans', async (req,res)=>{
+  try{
+    const r = await db.pool.query('SELECT * FROM plans ORDER BY created_at DESC')
+    res.json({ plans: r.rows })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+router.post('/plans', async (req,res)=>{
+  try{
+    const { name, price_monthly, max_sessions, max_agents, max_messages, max_chats, description, features } = req.body
+    const id = require('uuid').v4()
+    await db.pool.query(
+      'INSERT INTO plans(id,name,price_monthly,max_sessions,max_agents,max_messages,max_chats,description,features,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_TIMESTAMP)',
+      [id, name, price_monthly||0, max_sessions||0, max_agents||0, max_messages||0, max_chats||0, description||'', features||'']
+    )
+    res.json({ ok:true, id })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+router.put('/plans/:id', async (req,res)=>{
+  try{
+    const { name, price_monthly, max_sessions, max_agents, max_messages, max_chats, description, features } = req.body
+    await db.pool.query(
+      'UPDATE plans SET name=$1, price_monthly=$2, max_sessions=$3, max_agents=$4, max_messages=$5, max_chats=$6, description=$7, features=$8 WHERE id=$9',
+      [name, price_monthly, max_sessions, max_agents, max_messages, max_chats, description, features, req.params.id]
+    )
+    res.json({ ok:true })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/plans/:id', async (req,res)=>{
+  try{
+    await db.pool.query('DELETE FROM plans WHERE id=$1',[req.params.id])
+    res.json({ ok:true })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+// subscription management
+router.put('/subscriptions/:id', async (req,res)=>{
+  try{
+    const { status, plan_id, period_start, period_end } = req.body
+    await db.pool.query(
+      'UPDATE subscriptions SET status=$1, plan_id=$2, period_start=$3, period_end=$4 WHERE id=$5',
+      [status, plan_id, period_start, period_end, req.params.id]
+    )
+    res.json({ ok:true })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
+router.delete('/subscriptions/:id', async (req,res)=>{
+  try{
+    await db.pool.query('DELETE FROM subscriptions WHERE id=$1',[req.params.id])
     res.json({ ok:true })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })

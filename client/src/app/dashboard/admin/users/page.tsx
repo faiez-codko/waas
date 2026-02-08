@@ -1,58 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, MoreVertical, Shield, Mail, Trash2, Ban, Plus, X, User as UserIcon, Phone, CreditCard, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const initialUsers = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "+1 (555) 123-4567",
-    role: "Client",
-    status: "Active",
-    plan: "Pro",
-    joined: "Oct 12, 2023",
-    avatar: "JD"
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@company.com",
-    phone: "+1 (555) 987-6543",
-    role: "Client",
-    status: "Active",
-    plan: "Starter",
-    joined: "Oct 10, 2023",
-    avatar: "JS"
-  },
-  {
-    id: 3,
-    name: "Admin User",
-    email: "admin@waas.local",
-    phone: "+1 (555) 000-0000",
-    role: "Admin",
-    status: "Active",
-    plan: "Enterprise",
-    joined: "Sep 01, 2023",
-    avatar: "AD"
-  },
-  {
-    id: 4,
-    name: "Robert Fox",
-    email: "robert@test.com",
-    phone: "+1 (555) 456-7890",
-    role: "Client",
-    status: "Suspended",
-    plan: "Starter",
-    joined: "Nov 05, 2023",
-    avatar: "RF"
-  }
-];
+import api from "@/lib/api";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -60,10 +14,24 @@ export default function UsersPage() {
     name: "",
     email: "",
     phone: "",
-    role: "Client",
+    password: "", // Added password for creation
+    role: "client", // lowercase to match backend
     status: "Active",
     plan: "Starter"
   });
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  async function fetchUsers() {
+    try {
+      const res = await api.get('/admin/users');
+      setUsers(res.data.users);
+    } catch (e) {
+      console.error("Failed to fetch users", e);
+    }
+  }
 
   const handleOpenModal = (user: any = null) => {
     if (user) {
@@ -71,9 +39,10 @@ export default function UsersPage() {
       setFormData({
         name: user.name,
         email: user.email,
-        phone: user.phone,
+        phone: user.phone || "",
+        password: "", // Can't view password, only set new one (if we implemented that)
         role: user.role,
-        status: user.status,
+        status: user.status || "Active",
         plan: user.plan || "Starter"
       });
     } else {
@@ -82,7 +51,8 @@ export default function UsersPage() {
         name: "",
         email: "",
         phone: "",
-        role: "Client",
+        password: "",
+        role: "client",
         status: "Active",
         plan: "Starter"
       });
@@ -90,39 +60,59 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteUser = (userId: number) => {
+  const handleDeleteUser = async (userId: string) => {
     if (confirm("Are you sure you want to delete this user?")) {
-      setUsers(users.filter(user => user.id !== userId));
+      try {
+        await api.delete(`/admin/users/${userId}`);
+        setUsers(users.filter(user => user.id !== userId));
+      } catch (e) {
+        console.error("Failed to delete user", e);
+        alert("Failed to delete user");
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editingUser) {
-      setUsers(users.map(user => 
-        user.id === editingUser.id 
-          ? { ...user, ...formData }
-          : user
-      ));
-    } else {
-      const user = {
-        id: users.length + 1,
-        ...formData,
-        joined: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
-        avatar: formData.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-      };
-      setUsers([...users, user]);
+    try {
+      if (editingUser) {
+        // Update
+        await api.put(`/admin/users/${editingUser.id}`, {
+          name: formData.name,
+          role: formData.role
+        });
+        // Optimistic update
+        setUsers(users.map(user => 
+          user.id === editingUser.id 
+            ? { ...user, ...formData }
+            : user
+        ));
+      } else {
+        // Create
+        if (!formData.password) {
+            alert("Password is required for new users");
+            return;
+        }
+        const res = await api.post('/admin/users', {
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            role: formData.role
+        });
+        setUsers([res.data.user, ...users]);
+      }
+      setIsModalOpen(false);
+      setEditingUser(null);
+    } catch (e: any) {
+      console.error("Failed to save user", e);
+      alert(e.response?.data?.error || "Failed to save user");
     }
-    
-    setIsModalOpen(false);
-    setEditingUser(null);
-    setFormData({ name: "", email: "", phone: "", role: "Client", status: "Active", plan: "Starter" });
   };
 
   const filteredUsers = users.filter(user => 
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (user.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (user.email || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -176,25 +166,25 @@ export default function UsersPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                        {user.avatar}
+                        {user.name ? user.name.slice(0,2).toUpperCase() : user.email.slice(0,2).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-medium">{user.name}</div>
+                        <div className="font-medium">{user.name || "No Name"}</div>
                         <div className="text-xs text-zinc-500">{user.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400 text-sm">
-                    {user.phone}
+                    {user.phone || "-"}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {user.role === "Admin" ? (
+                      {user.role === "admin" ? (
                         <Shield className="h-4 w-4 text-indigo-600" />
                       ) : (
                         <Mail className="h-4 w-4 text-zinc-400" />
                       )}
-                      <span>{user.role}</span>
+                      <span className="capitalize">{user.role}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -211,11 +201,11 @@ export default function UsersPage() {
                           : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                       }`}
                     >
-                      {user.status}
+                      {user.status || "Active"}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    {user.joined}
+                    {new Date(user.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -313,6 +303,20 @@ export default function UsersPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Password {editingUser && "(Leave blank to keep current)"}</label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={formData.password}
+                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Role</label>
@@ -321,8 +325,8 @@ export default function UsersPage() {
                       onChange={(e) => setFormData({...formData, role: e.target.value})}
                       className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
                     >
-                      <option value="Client">Client</option>
-                      <option value="Admin">Admin</option>
+                      <option value="client">Client</option>
+                      <option value="admin">Admin</option>
                     </select>
                   </div>
                   <div className="space-y-2">

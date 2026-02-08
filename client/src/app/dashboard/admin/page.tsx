@@ -1,32 +1,60 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import { Users, CreditCard, DollarSign, Activity, TrendingUp, ArrowUpRight } from "lucide-react";
+import api from "@/lib/api";
 
 export default function AdminDashboard() {
-  const stats = [
+  const [stats, setStats] = useState({
+    total_users: 0,
+    active_subscriptions: 0,
+    monthly_revenue: 0,
+    server_status: "Checking..."
+  });
+  const [recentUsers, setRecentUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [statsRes, usersRes] = await Promise.all([
+          api.get('/admin/stats'),
+          api.get('/admin/users') // We'll slice top 5 on client side for now as backend returns all
+        ]);
+        
+        setStats(statsRes.data);
+        setRecentUsers(usersRes.data.users.slice(0, 5));
+      } catch (e) {
+        console.error("Failed to fetch admin dashboard data", e);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const statCards = [
     {
       name: "Total Users",
-      value: "1,234",
-      change: "+12%",
+      value: stats.total_users.toLocaleString(),
+      change: "+12%", // Mock trend for now
       trend: "up",
       icon: Users,
     },
     {
       name: "Active Subscriptions",
-      value: "856",
+      value: stats.active_subscriptions.toLocaleString(),
       change: "+8%",
       trend: "up",
       icon: CreditCard,
     },
     {
       name: "Monthly Revenue",
-      value: "$45,231",
+      value: `$${stats.monthly_revenue.toLocaleString()}`,
       change: "+23%",
       trend: "up",
       icon: DollarSign,
     },
     {
       name: "Server Status",
-      value: "99.9%",
+      value: stats.server_status,
       change: "Stable",
       trend: "neutral",
       icon: Activity,
@@ -41,7 +69,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <div
             key={stat.name}
             className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm"
@@ -73,18 +101,22 @@ export default function AdminDashboard() {
           </div>
           <div className="p-6">
             <div className="space-y-6">
-                {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="flex items-center justify-between">
+                {recentUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                <span className="font-semibold text-xs text-zinc-500">U{i}</span>
+                                <span className="font-semibold text-xs text-zinc-500">
+                                  {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                                </span>
                             </div>
                             <div>
-                                <p className="text-sm font-medium">New User {i}</p>
-                                <p className="text-xs text-zinc-500">user{i}@example.com</p>
+                                <p className="text-sm font-medium">{user.name || "No Name"}</p>
+                                <p className="text-xs text-zinc-500">{user.email}</p>
                             </div>
                         </div>
-                        <div className="text-xs text-zinc-500">2 min ago</div>
+                        <div className="text-xs text-zinc-500">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </div>
                     </div>
                 ))}
             </div>

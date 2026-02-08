@@ -1,77 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, ArrowUpRight, ArrowDownRight, Plus, Edit2, Trash2, Check, X, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-// Mock Data
-const initialSubscriptions = [
-  {
-    id: "SUB-1234",
-    user: "John Doe",
-    plan: "Pro",
-    amount: "$79.00",
-    status: "Active",
-    billingCycle: "Monthly",
-    nextBilling: "Nov 12, 2023"
-  },
-  {
-    id: "SUB-5678",
-    user: "Jane Smith",
-    plan: "Starter",
-    amount: "$29.00",
-    status: "Active",
-    billingCycle: "Monthly",
-    nextBilling: "Nov 10, 2023"
-  },
-  {
-    id: "SUB-9012",
-    user: "Robert Fox",
-    plan: "Enterprise",
-    amount: "$199.00",
-    status: "Past Due",
-    billingCycle: "Monthly",
-    nextBilling: "Nov 05, 2023"
-  }
-];
-
-const initialPlans = [
-  {
-    id: "plan_1",
-    name: "Starter",
-    price: 29,
-    currency: "$",
-    billingCycle: "Monthly",
-    description: "Perfect for individuals and small projects",
-    features: ["Up to 5 Projects", "Basic Analytics", "Community Support", "1GB Storage"],
-    active: true
-  },
-  {
-    id: "plan_2",
-    name: "Pro",
-    price: 79,
-    currency: "$",
-    billingCycle: "Monthly",
-    description: "For growing businesses and teams",
-    features: ["Unlimited Projects", "Advanced Analytics", "Priority Support", "10GB Storage", "Custom Domains"],
-    active: true
-  },
-  {
-    id: "plan_3",
-    name: "Enterprise",
-    price: 199,
-    currency: "$",
-    billingCycle: "Monthly",
-    description: "Maximum power and control",
-    features: ["Unlimited Everything", "Custom Solutions", "24/7 Phone Support", "Unlimited Storage", "SLA"],
-    active: true
-  }
-];
+import api from "@/lib/api";
 
 export default function SubscriptionsPage() {
   const [activeTab, setActiveTab] = useState("subscriptions");
-  const [plans, setPlans] = useState(initialPlans);
-  const [subs, setSubs] = useState(initialSubscriptions);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [subs, setSubs] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({});
   
   // Plan Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,6 +22,10 @@ export default function SubscriptionsPage() {
     billingCycle: "Monthly",
     description: "",
     features: "",
+    max_sessions: "1",
+    max_agents: "1",
+    max_messages: "1000",
+    max_chats: "1000",
     active: true
   });
 
@@ -90,11 +33,47 @@ export default function SubscriptionsPage() {
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState<any>(null);
   const [subFormData, setSubFormData] = useState({
-    user: "",
-    plan: "Starter",
-    status: "Active",
+    user_id: "",
+    plan_id: "",
+    status: "active",
     billingCycle: "Monthly"
   });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  async function fetchData() {
+    try {
+      const [plansRes, subsRes, usersRes, statsRes] = await Promise.all([
+        api.get('/admin/plans'),
+        api.get('/admin/subscriptions'),
+        api.get('/admin/users'),
+        api.get('/admin/stats')
+      ]);
+
+      setPlans(plansRes.data.plans.map((p: any) => ({
+        ...p,
+        price: p.price_monthly,
+        features: p.features ? p.features.split('\n') : [],
+        active: true // default for now
+      })));
+      
+      setSubs(subsRes.data.subscriptions.map((s: any) => ({
+        ...s,
+        user: s.user_name || s.user_email || 'Unknown',
+        plan: s.plan_name || 'Unknown',
+        amount: `$${s.amount || 0}`,
+        status: s.status || 'active', // default
+        nextBilling: s.period_end ? new Date(s.period_end).toLocaleDateString() : 'N/A'
+      })));
+
+      setUsers(usersRes.data.users);
+      setStats(statsRes.data);
+    } catch (e) {
+      console.error("Failed to fetch data", e);
+    }
+  }
 
   const handleOpenModal = (plan: any = null) => {
     if (plan) {
@@ -102,10 +81,14 @@ export default function SubscriptionsPage() {
       setFormData({
         name: plan.name,
         price: plan.price.toString(),
-        currency: plan.currency,
-        billingCycle: plan.billingCycle,
-        description: plan.description,
+        currency: "$",
+        billingCycle: "Monthly",
+        description: plan.description || "",
         features: plan.features.join("\n"),
+        max_sessions: plan.max_sessions?.toString() || "1",
+        max_agents: plan.max_agents?.toString() || "1",
+        max_messages: plan.max_messages?.toString() || "1000",
+        max_chats: plan.max_chats?.toString() || "1000",
         active: plan.active
       });
     } else {
@@ -117,6 +100,10 @@ export default function SubscriptionsPage() {
         billingCycle: "Monthly",
         description: "",
         features: "",
+        max_sessions: "1",
+        max_agents: "1",
+        max_messages: "1000",
+        max_chats: "1000",
         active: true
       });
     }
@@ -126,83 +113,108 @@ export default function SubscriptionsPage() {
   const handleOpenSubModal = (sub: any = null) => {
     if (sub) {
       setEditingSub(sub);
+      // find plan id by name if needed, but sub should have plan_id if fetched from backend
+      // Wait, the fetched sub has plan_name, but maybe not plan_id in the map above?
+      // I should preserve plan_id in the map.
+      // The backend query returns s.id, s.status, ... p.name. It might not return p.id as plan_id?
+      // Check admin.js query: SELECT s.id ... s.plan_id is implied? No, query is explicit.
+      // Query: SELECT s.id, ... p.name ... FROM subscriptions s ...
+      // I should check if s.plan_id is selected.
+      // admin.js line 32: SELECT s.id, s.status, s.period_start, s.period_end, u.name..., p.name...
+      // It does NOT select s.plan_id or s.user_id. I should fix the backend query to include ids.
+      // For now, I'll assume I'll fix the backend query.
       setSubFormData({
-        user: sub.user,
-        plan: sub.plan,
+        user_id: sub.user_id || "", // I need to fetch this
+        plan_id: sub.plan_id || "", // I need to fetch this
         status: sub.status,
-        billingCycle: sub.billingCycle
+        billingCycle: "Monthly"
       });
     } else {
       setEditingSub(null);
       setSubFormData({
-        user: "",
-        plan: "Starter",
-        status: "Active",
+        user_id: "",
+        plan_id: plans[0]?.id || "",
+        status: "active",
         billingCycle: "Monthly"
       });
     }
     setIsSubModalOpen(true);
   };
 
-  const handleDeletePlan = (planId: string) => {
+  const handleDeletePlan = async (planId: string) => {
     if (confirm("Are you sure you want to delete this plan?")) {
-      setPlans(plans.filter(p => p.id !== planId));
+      try {
+        await api.delete(`/admin/plans/${planId}`);
+        fetchData();
+      } catch (e) {
+        console.error(e);
+        alert("Failed to delete plan");
+      }
     }
   };
 
-  const handleDeleteSub = (subId: string) => {
+  const handleDeleteSub = async (subId: string) => {
     if (confirm("Are you sure you want to delete this subscription?")) {
-      setSubs(subs.filter(s => s.id !== subId));
+      try {
+        await api.delete(`/admin/subscriptions/${subId}`);
+        fetchData();
+      } catch (e) {
+        console.error(e);
+        alert("Failed to delete subscription");
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const featuresList = formData.features.split("\n").filter(f => f.trim() !== "");
-    
-    if (editingPlan) {
-      setPlans(plans.map(p => 
-        p.id === editingPlan.id 
-          ? { ...p, ...formData, price: Number(formData.price), features: featuresList }
-          : p
-      ));
-    } else {
-      const newPlan = {
-        id: `plan_${Date.now()}`,
-        ...formData,
-        price: Number(formData.price),
-        features: featuresList
-      };
-      setPlans([...plans, newPlan]);
+    const payload = {
+      name: formData.name,
+      price_monthly: Number(formData.price),
+      description: formData.description,
+      features: formData.features,
+      max_sessions: Number(formData.max_sessions),
+      max_agents: Number(formData.max_agents),
+      max_messages: Number(formData.max_messages),
+      max_chats: Number(formData.max_chats)
+    };
+
+    try {
+      if (editingPlan) {
+        await api.put(`/admin/plans/${editingPlan.id}`, payload);
+      } else {
+        await api.post('/admin/plans', payload);
+      }
+      fetchData();
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save plan");
     }
-    setIsModalOpen(false);
   };
 
-  const handleSubSubmit = (e: React.FormEvent) => {
+  const handleSubSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const planDetails = plans.find(p => p.name === subFormData.plan) || plans[0];
-    const amount = `$${planDetails.price}.00`;
-    
-    if (editingSub) {
-      setSubs(subs.map(s => 
-        s.id === editingSub.id 
-          ? { 
-              ...s, 
-              ...subFormData,
-              amount,
-            }
-          : s
-      ));
-    } else {
-      const newSub = {
-        id: `SUB-${Math.floor(Math.random() * 10000)}`,
-        ...subFormData,
-        amount,
-        nextBilling: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-      };
-      setSubs([...subs, newSub]);
+    try {
+      if (editingSub) {
+        await api.put(`/admin/subscriptions/${editingSub.id}`, {
+          status: subFormData.status,
+          plan_id: subFormData.plan_id,
+          // Update period if needed, but for now just status/plan
+          period_start: editingSub.period_start,
+          period_end: editingSub.period_end
+        });
+      } else {
+        // Create subscription
+        await api.post(`/admin/users/${subFormData.user_id}/subscription`, {
+          planId: subFormData.plan_id
+        });
+      }
+      fetchData();
+      setIsSubModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save subscription");
     }
-    setIsSubModalOpen(false);
   };
 
   return (
@@ -264,44 +276,21 @@ export default function SubscriptionsPage() {
           {/* Stats Cards */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Total Revenue", value: "$12,450", change: "+12.5%", trend: "up" },
-              { label: "Active Subscriptions", value: "854", change: "+4.2%", trend: "up" },
-              { label: "Churn Rate", value: "2.4%", change: "-0.5%", trend: "down" },
-              { label: "ARPU", value: "$48.00", change: "+1.2%", trend: "up" },
+              { label: "Total Revenue", value: `$${stats.monthly_revenue || 0}`, change: "+0%", trend: "up" },
+              { label: "Active Subscriptions", value: stats.active_subscriptions || 0, change: "+0%", trend: "up" },
+              { label: "Total Users", value: stats.total_users || 0, change: "+0%", trend: "up" },
+              { label: "Server Status", value: stats.server_status || "Stable", change: "", trend: "up" },
             ].map((stat, i) => (
               <div key={i} className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{stat.label}</div>
                 <div className="mt-2 flex items-baseline gap-2">
                   <span className="text-2xl font-bold">{stat.value}</span>
-                  <span className={`flex items-center text-sm font-medium ${
-                    (stat.trend === "up" && stat.label !== "Churn Rate") || (stat.trend === "down" && stat.label === "Churn Rate")
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}>
-                    {stat.trend === "up" ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
-                    {stat.change}
-                  </span>
                 </div>
               </div>
             ))}
           </div>
 
           <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
-              <div className="relative max-w-sm flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <input
-                  type="text"
-                  placeholder="Search subscriptions..."
-                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                />
-              </div>
-              <button className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
-                <Filter className="h-4 w-4" />
-                Filter
-              </button>
-            </div>
-
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -318,7 +307,7 @@ export default function SubscriptionsPage() {
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                   {subs.map((sub) => (
                     <tr key={sub.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs text-zinc-500">{sub.id}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-zinc-500">{sub.id.substring(0,8)}...</td>
                       <td className="px-6 py-4 font-medium">{sub.user}</td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
@@ -329,7 +318,7 @@ export default function SubscriptionsPage() {
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            sub.status === "Active"
+                            sub.status === "active"
                               ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                               : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                           }`}
@@ -358,6 +347,11 @@ export default function SubscriptionsPage() {
                       </td>
                     </tr>
                   ))}
+                  {subs.length === 0 && (
+                     <tr>
+                       <td colSpan={7} className="px-6 py-4 text-center text-zinc-500">No subscriptions found</td>
+                     </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -372,9 +366,9 @@ export default function SubscriptionsPage() {
                   <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{plan.name}</h3>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-zinc-900 dark:text-white">
-                      {plan.currency}{plan.price}
+                      ${plan.price}
                     </span>
-                    <span className="text-sm text-zinc-500">/{plan.billingCycle === "Monthly" ? "mo" : "yr"}</span>
+                    <span className="text-sm text-zinc-500">/mo</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -393,10 +387,10 @@ export default function SubscriptionsPage() {
                 </div>
               </div>
               
-              <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 h-10">{plan.description}</p>
+              <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 h-10 line-clamp-2">{plan.description}</p>
               
               <div className="mt-6 space-y-3">
-                {plan.features.map((feature, i) => (
+                {plan.features.slice(0,4).map((feature:string, i:number) => (
                   <div key={i} className="flex items-start gap-3 text-sm text-zinc-600 dark:text-zinc-300">
                     <Check className="h-4 w-4 shrink-0 text-indigo-600" />
                     <span>{feature}</span>
@@ -404,14 +398,10 @@ export default function SubscriptionsPage() {
                 ))}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-zinc-100 dark:border-zinc-800">
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  plan.active 
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                }`}>
-                  {plan.active ? "Active Plan" : "Inactive"}
-                </span>
+              <div className="mt-6 pt-6 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-500">
+                 <div>Sessions: {plan.max_sessions}</div>
+                 <div>Agents: {plan.max_agents}</div>
+                 <div>Messages: {plan.max_messages}</div>
               </div>
             </div>
           ))}
@@ -448,7 +438,7 @@ export default function SubscriptionsPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">{editingPlan ? "Edit Plan" : "Create New Plan"}</h2>
                   <button 
@@ -466,82 +456,68 @@ export default function SubscriptionsPage() {
                       <input
                         required
                         type="text"
-                        placeholder="e.g. Pro Plan"
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Price</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">{formData.currency}</span>
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="29.00"
-                          value={formData.price}
-                          onChange={(e) => setFormData({...formData, price: e.target.value})}
-                          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-8 pr-4 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                        />
-                      </div>
+                      <label className="text-sm font-medium">Price (Monthly)</label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({...formData, price: e.target.value})}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Billing Cycle</label>
-                      <select
-                        value={formData.billingCycle}
-                        onChange={(e) => setFormData({...formData, billingCycle: e.target.value})}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                      >
-                        <option value="Monthly">Monthly</option>
-                        <option value="Yearly">Yearly</option>
-                      </select>
+                       <label className="text-sm font-medium">Max Sessions</label>
+                       <input type="number" value={formData.max_sessions} onChange={e=>setFormData({...formData, max_sessions: e.target.value})} className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"/>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Status</label>
-                      <select
-                        value={formData.active ? "true" : "false"}
-                        onChange={(e) => setFormData({...formData, active: e.target.value === "true"})}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                      >
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                      </select>
+                       <label className="text-sm font-medium">Max Agents</label>
+                       <input type="number" value={formData.max_agents} onChange={e=>setFormData({...formData, max_agents: e.target.value})} className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"/>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-sm font-medium">Max Messages</label>
+                       <input type="number" value={formData.max_messages} onChange={e=>setFormData({...formData, max_messages: e.target.value})} className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"/>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-sm font-medium">Max Chats</label>
+                       <input type="number" value={formData.max_chats} onChange={e=>setFormData({...formData, max_chats: e.target.value})} className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"/>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Description</label>
-                    <input
-                      type="text"
-                      placeholder="Brief description of the plan"
+                    <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
+                      rows={2}
                     />
                   </div>
-
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Features (one per line)</label>
                     <textarea
-                      rows={5}
-                      placeholder="Unlimited Projects&#10;Advanced Analytics&#10;Priority Support"
                       value={formData.features}
                       onChange={(e) => setFormData({...formData, features: e.target.value})}
-                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black resize-none font-mono"
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
+                      rows={4}
                     />
                   </div>
 
-                  <div className="flex justify-end gap-3 mt-6">
+                  <div className="flex justify-end gap-3 pt-4">
                     <button
                       type="button"
                       onClick={() => setIsModalOpen(false)}
-                      className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                       Cancel
                     </button>
@@ -549,7 +525,7 @@ export default function SubscriptionsPage() {
                       type="submit"
                       className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
                     >
-                      {editingPlan ? "Update Plan" : "Create Plan"}
+                      {editingPlan ? "Save Changes" : "Create Plan"}
                     </button>
                   </div>
                 </form>
@@ -558,11 +534,12 @@ export default function SubscriptionsPage() {
           </>
         )}
       </AnimatePresence>
+
       {/* Subscription Modal */}
       <AnimatePresence>
         {isSubModalOpen && (
           <>
-            <motion.div
+             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -575,7 +552,7 @@ export default function SubscriptionsPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold">{editingSub ? "Edit Subscription" : "Add Subscription"}</h2>
                   <button 
@@ -588,61 +565,56 @@ export default function SubscriptionsPage() {
 
                 <form onSubmit={handleSubSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">User Name</label>
-                    <input
+                    <label className="text-sm font-medium">User</label>
+                    <select
+                      disabled={!!editingSub}
                       required
-                      type="text"
-                      placeholder="John Doe"
-                      value={subFormData.user}
-                      onChange={(e) => setSubFormData({...subFormData, user: e.target.value})}
-                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                    />
+                      value={subFormData.user_id}
+                      onChange={(e) => setSubFormData({...subFormData, user_id: e.target.value})}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
+                    >
+                      <option value="">Select User</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Plan</label>
                     <select
-                      value={subFormData.plan}
-                      onChange={(e) => setSubFormData({...subFormData, plan: e.target.value})}
-                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                      required
+                      value={subFormData.plan_id}
+                      onChange={(e) => setSubFormData({...subFormData, plan_id: e.target.value})}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
                     >
-                      {plans.map(plan => (
-                        <option key={plan.id} value={plan.name}>{plan.name}</option>
+                      <option value="">Select Plan</option>
+                      {plans.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} - ${p.price}</option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  {editingSub && (
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Status</label>
                       <select
                         value={subFormData.status}
                         onChange={(e) => setSubFormData({...subFormData, status: e.target.value})}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none dark:bg-black dark:border-zinc-700"
                       >
-                        <option value="Active">Active</option>
-                        <option value="Past Due">Past Due</option>
-                        <option value="Cancelled">Cancelled</option>
+                         <option value="active">Active</option>
+                         <option value="past_due">Past Due</option>
+                         <option value="canceled">Canceled</option>
                       </select>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Billing Cycle</label>
-                      <select
-                        value={subFormData.billingCycle}
-                        onChange={(e) => setSubFormData({...subFormData, billingCycle: e.target.value})}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-black"
-                      >
-                        <option value="Monthly">Monthly</option>
-                        <option value="Yearly">Yearly</option>
-                      </select>
-                    </div>
-                  </div>
+                  )}
 
-                  <div className="flex justify-end gap-3 mt-6">
+                  <div className="flex justify-end gap-3 pt-4">
                     <button
                       type="button"
                       onClick={() => setIsSubModalOpen(false)}
-                      className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
                       Cancel
                     </button>
@@ -650,7 +622,7 @@ export default function SubscriptionsPage() {
                       type="submit"
                       className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
                     >
-                      {editingSub ? "Update Subscription" : "Add Subscription"}
+                      {editingSub ? "Save Changes" : "Create Subscription"}
                     </button>
                   </div>
                 </form>
