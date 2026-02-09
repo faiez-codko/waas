@@ -15,6 +15,19 @@ async function resetSessions() {
     await db.pool.query('DELETE FROM sessions');
     console.log('Sessions table cleared.');
 
+    // 2.1 Delete all agents from database
+    try {
+      console.log('Clearing agents_meta table...');
+      await db.pool.query('DELETE FROM agents_meta');
+      console.log('agents_meta table cleared.');
+    } catch (err) {
+      console.log('Skipping agents_meta (table may not exist).');
+    }
+
+    console.log('Clearing agents table...');
+    await db.pool.query('DELETE FROM agents');
+    console.log('Agents table cleared.');
+
     // 3. Delete physical session files
     const sessionsDir = path.join(__dirname, 'sessions');
     if (fs.existsSync(sessionsDir)) {
