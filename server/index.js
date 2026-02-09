@@ -132,6 +132,7 @@ app.get('/admin/sessions', auth.verifyToken, auth.requireRole('admin'), async (r
 
 // auth routes
 app.use('/subscriptions', auth.verifyToken, require('./src/subscriptions'))
+app.use('/payment-methods', auth.verifyToken, require('./src/payment_methods'))
 
 // admin endpoints for plan management
 app.get('/admin/plans', auth.verifyToken, auth.requireRole('admin'), async (req,res)=>{

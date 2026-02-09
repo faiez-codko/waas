@@ -174,6 +174,17 @@ async function init() {
       published_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- payment methods table
+    CREATE TABLE IF NOT EXISTS payment_methods (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL, -- 'bank', 'wallet', 'other'
+      details TEXT, -- JSON or text details (account number, etc)
+      instructions TEXT,
+      is_active BOOLEAN DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   // migration: add agent_id to sessions if missing

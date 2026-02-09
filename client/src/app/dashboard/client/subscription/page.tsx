@@ -32,6 +32,14 @@ interface Invoice {
   status: string;
 }
 
+interface PaymentMethod {
+  id: string;
+  title: string;
+  type: 'bank' | 'wallet' | 'other';
+  details: string;
+  instructions: string;
+}
+
 export default function SubscriptionPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -39,6 +47,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -46,15 +55,17 @@ export default function SubscriptionPage() {
 
   const fetchData = async () => {
     try {
-      const [plansRes, subRes, invRes] = await Promise.all([
+      const [plansRes, subRes, invRes, methodsRes] = await Promise.all([
         api.get('/subscriptions/plans'),
         api.get('/subscriptions/me'),
-        api.get('/subscriptions/invoices')
+        api.get('/subscriptions/invoices'),
+        api.get('/payment-methods')
       ]);
 
       setPlans(plansRes.data.plans);
       setSubscription(subRes.data.subscription);
       setInvoices(invRes.data.invoices || []);
+      setPaymentMethods(methodsRes.data.paymentMethods || []);
     } catch (e) {
       console.error("Failed to fetch subscription data", e);
     } finally {
@@ -230,21 +241,21 @@ export default function SubscriptionPage() {
                 <p className="font-medium text-sm text-zinc-500 uppercase tracking-wider">Payment Options</p>
                 
                 <div className="space-y-3">
-                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                    <p className="font-semibold text-sm">NayaPay / SadaPay</p>
-                    <p className="text-sm text-zinc-500 font-mono mt-1">0300-1234567 (Admin Name)</p>
-                  </div>
-                  
-                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                    <p className="font-semibold text-sm">EasyPaisa / Jazz Cash</p>
-                    <p className="text-sm text-zinc-500 font-mono mt-1">0300-1234567 (Admin Name)</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                    <p className="font-semibold text-sm">Bank Transfer</p>
-                    <p className="text-sm text-zinc-500 mt-1">Bank: Meezan Bank</p>
-                    <p className="text-sm text-zinc-500 font-mono">Account: 1234567890</p>
-                  </div>
+                  {paymentMethods.length === 0 ? (
+                    <div className="p-4 text-center text-zinc-500 text-sm border border-dashed border-zinc-300 rounded-lg">
+                      No payment methods available. Please contact admin.
+                    </div>
+                  ) : (
+                    paymentMethods.map((method) => (
+                      <div key={method.id} className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                        <p className="font-semibold text-sm">{method.title}</p>
+                        <p className="text-sm text-zinc-500 whitespace-pre-wrap font-mono mt-1">{method.details}</p>
+                        {method.instructions && (
+                           <p className="text-xs text-zinc-400 mt-1 italic">{method.instructions}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 

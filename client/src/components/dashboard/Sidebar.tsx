@@ -46,6 +46,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     { href: "/dashboard/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/admin/users", label: "Users", icon: Users },
     { href: "/dashboard/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+    { href: "/dashboard/admin/payment-methods", label: "Payment Methods", icon: CreditCard },
     { href: "/dashboard/admin/blogs", label: "Blogs", icon: BookOpen },
     { href: "/dashboard/admin/settings", label: "Settings", icon: Settings },
   ];
