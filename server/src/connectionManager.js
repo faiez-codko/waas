@@ -112,6 +112,20 @@ class ConnectionManager {
     return true
   }
 
+  async logoutSession(id) {
+    const s = this.sessions.get(id)
+    if (s && s.sock) {
+      try {
+        await s.sock.logout()
+      } catch (e) {
+        console.error(`Error logging out session ${id}`, e)
+        throw e
+      }
+    } else {
+        throw new Error('session not active or socket not ready')
+    }
+  }
+
   async restoreSessions() {
     try {
         const db = require('./db')
@@ -143,7 +157,7 @@ class ConnectionManager {
       retryRequestDelayMs: 2000,
     })
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async(update) => {
       const { connection, lastDisconnect, qr } = update
       console.log(`Session ${id} update: connection=${connection}, qr=${qr ? 'YES' : 'NO'}`)
 
@@ -155,8 +169,29 @@ class ConnectionManager {
              // add a small delay to avoid tight loops
              setTimeout(() => this._initSocket(id, userId, agentId), 3000)
           } else {
-             // if logged out, clean up
-             this.deleteSession(id).catch(console.error)
+             // if logged out, don't delete the session, just reset it to init state
+             console.log(`Session ${id} logged out. Resetting to init state...`)
+             try {
+                // 1. clear auth folder
+                const fs = require('fs')
+                const path = require('path')
+                const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
+                if (fs.existsSync(sessionDir)) {
+                    fs.rmSync(sessionDir, { recursive: true, force: true })
+                }
+                
+                // 2. update DB
+                const db = require('./db')
+                await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5', 
+                    ['init', null, null, null, id])
+                
+                // 3. clear memory
+                const s = this.sessions.get(id)
+                if(s) { s.status = 'init'; s.qr = null; this.sessions.set(id, s); }
+
+                // 4. restart socket to get new QR
+                this._initSocket(id, userId, agentId)
+             } catch(e) { console.error('logout reset failed', e) }
           }
       }
 

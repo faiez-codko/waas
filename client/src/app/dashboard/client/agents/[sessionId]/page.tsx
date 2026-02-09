@@ -90,6 +90,7 @@ export default function SessionDetailsPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'chats'>('overview');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
@@ -263,6 +264,23 @@ export default function SessionDetailsPage() {
     }
   };
 
+  const handleLogout = async () => {
+    if (confirm("Are you sure you want to log out of this WhatsApp session? You will need to scan the QR code again to reconnect.")) {
+      setIsLoggingOut(true);
+      try {
+        await api.post(`/sessions/${sessionId}/logout`);
+        // refresh data to show disconnected state
+        await fetchSessionData();
+        alert("Logged out successfully");
+      } catch (e) {
+        console.error("Failed to logout session", e);
+        alert("Failed to logout session");
+      } finally {
+        setIsLoggingOut(false);
+      }
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatId) return;
@@ -331,6 +349,21 @@ export default function SessionDetailsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {session.status === 'active' || session.status === 'open' ? (
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 dark:border-orange-900/30 dark:bg-orange-900/10 dark:text-orange-400 dark:hover:bg-orange-900/20 disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Power className="h-4 w-4" />
+                )}
+                {isLoggingOut ? "Logging out..." : "Logout"}
+              </button>
+            ) : null}
+
             <button
               onClick={handleDelete}
               disabled={isDeleting}
