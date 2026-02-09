@@ -2,73 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Bot, Sparkles, Zap, Brain, MessageSquare, Clock, Phone, Activity, QrCode, Loader2 } from "lucide-react";
+import { Clock, Phone, Activity, QrCode, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import api from "@/lib/api";
 
-const models = [
-  {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
-    provider: "OpenAI",
-    description: "Most capable model for complex tasks",
-    icon: Sparkles
-  },
-  {
-    id: "claude-3-opus",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    description: "Excel at reasoning and coding",
-    icon: Brain
-  },
-  {
-    id: "gemini-pro",
-    name: "Gemini Pro",
-    provider: "Google",
-    description: "Fast and efficient for general tasks",
-    icon: Zap
-  }
-];
 
-const initialSessions = [
-  {
-    id: "sess_001",
-    phoneNumber: "+1 (555) 123-4567",
-    status: "active",
-    lastActive: "Just now",
-    messageCount: 24,
-    platform: "WhatsApp",
-    isEnabled: true,
-    excludedNumbers: ""
-  },
-  {
-    id: "sess_002",
-    phoneNumber: "+1 (555) 987-6543",
-    status: "idle",
-    lastActive: "5 mins ago",
-    messageCount: 12,
-    platform: "WhatsApp",
-    isEnabled: true,
-    excludedNumbers: ""
-  },
-  {
-    id: "sess_003",
-    phoneNumber: "+44 20 7123 4567",
-    status: "active",
-    lastActive: "1 min ago",
-    messageCount: 8,
-    platform: "WhatsApp",
-    isEnabled: false,
-    excludedNumbers: ""
-  }
-];
+
+
 
 export default function AgentsPage() {
   const router = useRouter();
-  const [selectedModel, setSelectedModel] = useState("gpt-4-turbo");
-  const [systemPrompt, setSystemPrompt] = useState(
-    "You are a helpful customer support agent for WaaS. Be polite, concise, and helpful."
-  );
+
   const [isSaving, setIsSaving] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -170,13 +114,13 @@ export default function AgentsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${session.status.status === "open" || session.status.status === "active"
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${session.status === "open"
                           ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                           : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
                         }`}>
-                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status.status === "open" || session.status.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status === "open"  ? "bg-green-500" : "bg-zinc-400"
                           }`} />
-                        {(session.status.status || "unknown")}
+                        {(session.status || "unknown")}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">

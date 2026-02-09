@@ -200,7 +200,6 @@ export default function ConnectAgentPage() {
       if (res.data.qr) {
         setQrCode(res.data.qr);
       }
-      // pollStatus(res.data.id); // Disabled in favor of WebSockets
     } catch (e: any) {
       toast.error(e.message , {
         position : 'top-center'
@@ -211,27 +210,28 @@ export default function ConnectAgentPage() {
     }
   };
 
-  /*
-  const pollStatus = (sid: string) => {
+  // Polling fallback
+  useEffect(() => {
+    if (!sessionId || step !== 'qr') return;
+    
     const interval = setInterval(async () => {
       try {
-        const res = await api.get(`/sessions/${sid}`);
+        const res = await api.get(`/sessions/${sessionId}`);
         const s = res.data.session;
         
-        if (s.qr) {
-          setQrCode(s.qr);
-        }
+        if (s.qr) setQrCode(s.qr);
 
         if (s.status === 'open' || s.status === 'active') {
-          clearInterval(interval);
+          console.log("✅ Connection established (via poll)!");
           setStep('config');
         }
       } catch (e) {
         // ignore errors during poll
       }
     }, 2000);
-  };
-  */
+
+    return () => clearInterval(interval);
+  }, [sessionId, step]);
 
   const handleFinish = async () => {
     if (!sessionId) return;

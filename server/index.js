@@ -199,7 +199,7 @@ app.get('/sessions', auth.verifyToken, async (req, res) => {
     // Enrich with live status from manager if available
     const sessions = r.rows.map(row => {
       const liveStatus = manager.getSessionStatus(row.id)
-      return { ...row, status: liveStatus || row.status }
+      return { ...row, status: liveStatus ? liveStatus.status : row.status }
     })
     
     res.json({ sessions })

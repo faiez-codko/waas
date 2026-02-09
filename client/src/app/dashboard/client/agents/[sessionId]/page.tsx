@@ -35,6 +35,7 @@ import {
   Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 const models = [
   {
@@ -288,10 +289,10 @@ export default function SessionDetailsPage() {
       
       // refresh data
       await fetchSessionData();
-      alert("Changes saved successfully");
+      toast.success("Changes saved successfully");
     } catch (e) {
       console.error("Failed to save", e);
-      alert("Failed to save changes");
+      toast.error("Failed to save changes");
     } finally {
       setIsSaving(false);
     }
@@ -305,7 +306,7 @@ export default function SessionDetailsPage() {
         router.push('/dashboard/client/agents');
       } catch (e) {
         console.error("Failed to delete session", e);
-        alert("Failed to delete session");
+        toast.error("Failed to delete session");
         setIsDeleting(false);
       }
     }
@@ -318,10 +319,14 @@ export default function SessionDetailsPage() {
         await api.post(`/sessions/${sessionId}/logout`);
         // refresh data to show disconnected state
         await fetchSessionData();
-        alert("Logged out successfully");
+        toast.success("Logged out successfully" , {
+          position : 'top-center'
+        });
       } catch (e) {
         console.error("Failed to logout session", e);
-        alert("Failed to logout session");
+        toast.error("Failed to logout session" , {
+          position : 'top-center'
+        });
       } finally {
         setIsLoggingOut(false);
       }
@@ -351,7 +356,7 @@ export default function SessionDetailsPage() {
       }
     } catch (e) {
       console.error("Failed to send message", e);
-      alert("Failed to send message");
+      toast.error("Failed to send message");
       setMessageInput(text);
     }
   };
