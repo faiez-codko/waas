@@ -28,7 +28,7 @@ router.post('/', async (req,res)=>{
     await db.pool.query('INSERT INTO agents(id,user_id,name,webhook_url,created_at) VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP)',[id,userId,name,webhook_url])
     // store system prompt in a lightweight table (agents_meta)
     try{
-      await db.pool.query('CREATE TABLE IF NOT EXISTS agents_meta (agent_id TEXT PRIMARY KEY, system_prompt TEXT, model TEXT)')
+      await db.pool.query('CREATE TABLE IF NOT EXISTS agents_meta (agent_id TEXT PRIMARY KEY, system_prompt TEXT, model TEXT, excluded_numbers TEXT)')
     }catch(e){/* ignore */}
     await db.pool.query('INSERT OR REPLACE INTO agents_meta(agent_id,system_prompt,model) VALUES($1,$2,$3)',[id,system_prompt||null,model||'gpt-3.5-turbo'])
     res.json({ id, name, webhook_url })
@@ -90,13 +90,15 @@ router.get('/:id', async (req,res)=>{
     const agent = check.rows[0]
     
     // get meta
-    const meta = await db.pool.query('SELECT system_prompt,model FROM agents_meta WHERE agent_id=$1',[id])
+    const meta = await db.pool.query('SELECT system_prompt,model,excluded_numbers FROM agents_meta WHERE agent_id=$1',[id])
     if (meta.rows && meta.rows.length) {
       agent.system_prompt = meta.rows[0].system_prompt
       agent.model = meta.rows[0].model
+      agent.excluded_numbers = meta.rows[0].excluded_numbers
     } else {
       agent.system_prompt = null
       agent.model = 'gpt-3.5-turbo'
+      agent.excluded_numbers = null
     }
     
     res.json({ agent })
@@ -110,7 +112,7 @@ router.get('/:id', async (req,res)=>{
 router.patch('/:id', async (req,res)=>{
   try{
     const id = req.params.id
-    const { name, webhook_url, system_prompt, model } = req.body
+    const { name, webhook_url, system_prompt, model, excluded_numbers } = req.body
     
     // verify ownership
     const check = await db.pool.query('SELECT user_id FROM agents WHERE id=$1',[id])
@@ -120,14 +122,15 @@ router.patch('/:id', async (req,res)=>{
     if (name) await db.pool.query('UPDATE agents SET name=$1 WHERE id=$2', [name, id])
     if (webhook_url !== undefined) await db.pool.query('UPDATE agents SET webhook_url=$1 WHERE id=$2', [webhook_url, id])
 
-    if (system_prompt !== undefined || model !== undefined) {
+    if (system_prompt !== undefined || model !== undefined || excluded_numbers !== undefined) {
        // check if meta exists
        const meta = await db.pool.query('SELECT agent_id FROM agents_meta WHERE agent_id=$1', [id])
        if (meta.rows && meta.rows.length) {
          if (system_prompt !== undefined) await db.pool.query('UPDATE agents_meta SET system_prompt=$1 WHERE agent_id=$2', [system_prompt, id])
          if (model !== undefined) await db.pool.query('UPDATE agents_meta SET model=$1 WHERE agent_id=$2', [model, id])
+         if (excluded_numbers !== undefined) await db.pool.query('UPDATE agents_meta SET excluded_numbers=$1 WHERE agent_id=$2', [excluded_numbers, id])
        } else {
-         await db.pool.query('INSERT INTO agents_meta(agent_id,system_prompt,model) VALUES($1,$2,$3)', [id, system_prompt||null, model||'gpt-3.5-turbo'])
+         await db.pool.query('INSERT INTO agents_meta(agent_id,system_prompt,model,excluded_numbers) VALUES($1,$2,$3,$4)', [id, system_prompt||null, model||'gpt-3.5-turbo', excluded_numbers||null])
        }
     }
     

@@ -288,11 +288,27 @@ class ConnectionManager {
 
         // load agent meta
         const db2 = require('./db')
-        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1',[currentAgentId])
+        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1',[currentAgentId])
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
         const systemPrompt = meta.system_prompt || ''
         const model = meta.model || 'gpt-3.5-turbo'
+        const excludedNumbers = meta.excluded_numbers || ''
+
+        // check exclusion
+        if (excludedNumbers) {
+           const remoteJid = msg.key.remoteJid
+           const senderNumber = remoteJid.split('@')[0]
+           const excludedList = excludedNumbers.split(',').map(s => s.trim()).filter(Boolean)
+           const isExcluded = excludedList.some(ex => {
+              // check if exact match or contains
+              return senderNumber.includes(ex.replace(/\+/g,''))
+           })
+           if (isExcluded) {
+             console.log('Ignored message from excluded contact:', remoteJid)
+             return
+           }
+        }
 
         // call AI
         try{

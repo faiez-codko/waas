@@ -241,7 +241,8 @@ export default function ConnectAgentPage() {
       const agentRes = await api.post('/agents', {
         name: agentConfig.name,
         system_prompt: agentConfig.systemPrompt,
-        model: agentConfig.model
+        model: agentConfig.model,
+        excluded_numbers: config.excludedNumbers
       });
       const agentId = agentRes.data.id;
 

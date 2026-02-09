@@ -68,6 +68,7 @@ interface SessionConfig {
 interface SessionData {
   id: string;
   phoneNumber: string;
+  contact: string;
   status: string;
   lastActive: string;
   messageCount: number;
@@ -98,6 +99,7 @@ export default function SessionDetailsPage() {
     id: sessionId,
     phoneNumber: "Loading...",
     status: "unknown",
+    contact: "",
     lastActive: "-",
     messageCount: 0,
     platform: "WhatsApp",
@@ -146,9 +148,10 @@ export default function SessionDetailsPage() {
       setIsLoading(true);
       const res = await api.get(`/sessions/${sessionId}`);
       const s = res.data.session;
+      console.log(s)
       
       let agentConfig = {
-        model: "gpt-3.5-turbo",
+        model: "openai",
         systemPrompt: ""
       };
 
@@ -157,7 +160,7 @@ export default function SessionDetailsPage() {
            const aRes = await api.get(`/agents/${s.agent_id}`);
            const a = aRes.data.agent;
            agentConfig = {
-             model: a.model || "gpt-3.5-turbo",
+             model: a.model || "openai",
              systemPrompt: a.system_prompt || ""
            };
          } catch (err) {
@@ -169,9 +172,11 @@ export default function SessionDetailsPage() {
         ...session,
         id: s.id,
         status: s.status,
-        phoneNumber: s.id.slice(0, 12), // Placeholder using ID
-        lastActive: new Date(s.created_at).toLocaleString(), // Placeholder using created_at
+        contact: s.contact_name || "",
+        phoneNumber: s.phone_number, // Placeholder using ID
+        lastActive: new Date(s.last_active).toLocaleString(undefined, { timeZone: 'Asia/Karachi' }),
         agent_id: s.agent_id,
+        messageCount: s.messageCount || 0,
         config: {
           ...session.config,
           ...agentConfig
@@ -200,7 +205,8 @@ export default function SessionDetailsPage() {
           // Update existing agent
           await api.patch(`/agents/${session.agent_id}`, {
             model: session.config.model,
-            system_prompt: session.config.systemPrompt
+            system_prompt: session.config.systemPrompt,
+            excluded_numbers: session.config.excludedNumbers
           });
         } else {
           // Create new agent
@@ -208,7 +214,8 @@ export default function SessionDetailsPage() {
             name: `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
             model: session.config.model,
             system_prompt: session.config.systemPrompt,
-            webhook_url: ""
+            webhook_url: "",
+            excluded_numbers: session.config.excludedNumbers
           });
           const newAgentId = newAgentRes.data.id;
           
@@ -401,19 +408,19 @@ export default function SessionDetailsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-zinc-500">Status</span>
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          session.status === "active" 
+                          session.status === "open" 
                             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                             : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
                         }`}>
                           <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                            session.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                            session.status === "open" ? "bg-green-500" : "bg-zinc-400"
                           }`} />
                           {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">Device</span>
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{session.device}</span>
+                        <span className="text-sm text-zinc-500">Contact</span>
+                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{session.contact}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-zinc-500">Battery</span>

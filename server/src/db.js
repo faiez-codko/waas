@@ -61,6 +61,16 @@ async function init() {
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    -- agents meta
+    CREATE TABLE IF NOT EXISTS agents_meta (
+      agent_id TEXT PRIMARY KEY,
+      system_prompt TEXT,
+      model TEXT,
+      excluded_numbers TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT,
@@ -240,6 +250,15 @@ async function init() {
     if (!cols.includes('battery_level')) db.exec("ALTER TABLE sessions ADD COLUMN battery_level INTEGER DEFAULT 0")
     if (!cols.includes('last_active')) db.exec("ALTER TABLE sessions ADD COLUMN last_active DATETIME")
   }catch(e){ console.error('sessions extra cols migration failed', e && e.message) }
+
+  // migration: add excluded_numbers to agents_meta if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(agents_meta)").all()
+    const hasCol = info.some(c=>c.name==='excluded_numbers')
+    if (!hasCol){
+      db.exec("ALTER TABLE agents_meta ADD COLUMN excluded_numbers TEXT")
+    }
+  }catch(e){ console.error('agents_meta excluded_numbers migration failed', e && e.message) }
 
   // seed plans (idempotent)
   try{
