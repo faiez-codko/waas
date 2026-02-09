@@ -8,7 +8,7 @@ import { QRCodeSVG } from "qrcode.react";
 import api from "@/lib/api";
 import { io } from "socket.io-client";
 
-
+import { toast } from "sonner"
 // --- Error Handling System ---
 
 type ErrorSeverity = 'error' | 'warning';
@@ -202,6 +202,9 @@ export default function ConnectAgentPage() {
       }
       // pollStatus(res.data.id); // Disabled in favor of WebSockets
     } catch (e: any) {
+      toast.error(e.message , {
+        position : 'top-center'
+      });
       handleError(e, createSession);
     } finally {
       setIsConnecting(false);
@@ -251,6 +254,7 @@ export default function ConnectAgentPage() {
 
       router.push('/dashboard/client/agents');
     } catch (e: any) {
+      console.log(e.message)
       handleError(e);
     }
   };
@@ -357,7 +361,22 @@ export default function ConnectAgentPage() {
                 <div className="relative">
                   <div className="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 opacity-20 blur-lg" />
                   <div className="relative flex h-72 w-72 items-center justify-center rounded-xl bg-white border-2 border-dashed border-zinc-200 dark:bg-black dark:border-zinc-700">
-                    {isConnecting ? (
+                    {error ? (
+                      <div className="flex flex-col items-center justify-center p-6 text-center w-full">
+                        <AlertTriangle className="h-10 w-10 text-red-500 mb-3" />
+                        <h4 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Connection Failed</h4>
+                        <p className="text-xs text-red-600 dark:text-red-300 mb-4 max-w-[200px] break-words">
+                          {error.message}
+                        </p>
+                        <button 
+                          onClick={() => createSession()}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Try Again
+                        </button>
+                      </div>
+                    ) : isConnecting ? (
                       <div className="flex flex-col items-center gap-4 text-indigo-600">
                         <Loader2 className="h-10 w-10 animate-spin" />
                         <span className="text-sm font-medium animate-pulse">Establishing connection...</span>

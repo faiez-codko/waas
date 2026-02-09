@@ -8,11 +8,26 @@ async function checkSessionLimit(userId){
     const sub = await db.pool.query('SELECT s.id,s.plan_id,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
     if (sub.rows && sub.rows.length){
       const p = sub.rows[0]
+      console.log(`[LimitCheck] User ${userId} Plan Max: ${p.max_sessions}`)
       if (p.max_sessions){
-        const used = await db.pool.query('SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1',[userId])
-        const cnt = used.rows && used.rows[0] ? used.rows[0].cnt : 0
-        return cnt < p.max_sessions
-      }
+          const used = await db.pool.query('SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1',[userId])
+          const cnt = used.rows && used.rows[0] ? used.rows[0].cnt : 0
+          console.log(`[LimitCheck] User ${userId} Used: ${cnt}`)
+          
+          if (cnt >= p.max_sessions) {
+            // Check if we have any 'init' sessions we can recycle
+            const recyclable = await db.pool.query("SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1 AND status='init'", [userId])
+            const recCnt = recyclable.rows && recyclable.rows[0] ? recyclable.rows[0].cnt : 0
+            if (recCnt > 0) {
+               console.log(`[LimitCheck] Limit reached but found ${recCnt} recyclable init sessions. allowing.`)
+               return true
+            }
+            return false
+          }
+          return true
+        }
+    } else {
+        console.log(`[LimitCheck] User ${userId} No Subscription found`)
     }
   }catch(e){ console.error('session limit check failed', e && e.message) }
   return true
@@ -52,11 +67,25 @@ class ConnectionManager {
           if (p.max_sessions){
             const cur = await db.pool.query('SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1',[userId])
             const cnt = cur.rows && cur.rows[0] ? cur.rows[0].cnt : 0
-            if (cnt >= p.max_sessions) throw new Error('session limit reached for your plan')
+            console.log(`[CreateSession] Atomic Check: ${cnt} >= ${p.max_sessions}`)
+            if (cnt >= p.max_sessions) {
+               // Try to delete one stale session
+               const stale = await db.pool.query("SELECT id FROM sessions WHERE user_id=$1 AND status='init' ORDER BY created_at ASC LIMIT 1", [userId])
+               if (stale.rows && stale.rows.length) {
+                   const staleId = stale.rows[0].id
+                   console.log(`[CreateSession] Auto-cleaning stale init session ${staleId}`)
+                   await this.deleteSession(staleId)
+               } else {
+                   throw new Error('session limit reached for your plan')
+               }
+            }
           }
         }
       }
-    }catch(e){ /* if db check fails, fallback to previous logic */ }
+    }catch(e){ 
+      if (e.message.includes('session limit')) throw e;
+      /* if db check fails, fallback to previous logic */ 
+    }
 
 
     const id = uuidv4()
@@ -91,7 +120,18 @@ class ConnectionManager {
     // 2. Delete from DB
     try {
       const db = require('./db')
+      
+      // Get agent_id before deleting session
+      const sRow = await db.pool.query('SELECT agent_id FROM sessions WHERE id=$1', [id])
+      const agentId = sRow.rows && sRow.rows.length ? sRow.rows[0].agent_id : null
+
       await db.pool.query('DELETE FROM sessions WHERE id=$1', [id])
+
+      // Delete associated agent if exists
+      if (agentId) {
+         await db.pool.query('DELETE FROM agents WHERE id=$1', [agentId])
+         console.log(`Deleted associated agent ${agentId} for session ${id}`)
+      }
     } catch (e) {
       console.error(`Error deleting session ${id} from DB`, e)
       throw e
