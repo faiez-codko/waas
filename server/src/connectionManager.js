@@ -1,36 +1,67 @@
 const { Boom } = require('@hapi/boom')
 const { v4: uuidv4 } = require('uuid')
 
-// helper: check session limit before creating
-async function checkSessionLimit(userId){
+// helper: reserve session slot (increment usage)
+async function reserveSessionSlot(userId){
   try{
     const db = require('./db')
-    const sub = await db.pool.query('SELECT s.id,s.plan_id,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
-    if (sub.rows && sub.rows.length){
-      const p = sub.rows[0]
-      console.log(`[LimitCheck] User ${userId} Plan Max: ${p.max_sessions}`)
-      if (p.max_sessions){
-          const used = await db.pool.query('SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1',[userId])
-          const cnt = used.rows && used.rows[0] ? used.rows[0].cnt : 0
-          console.log(`[LimitCheck] User ${userId} Used: ${cnt}`)
-          
-          if (cnt >= p.max_sessions) {
-            // Check if we have any 'init' sessions we can recycle
-            const recyclable = await db.pool.query("SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1 AND status='init'", [userId])
-            const recCnt = recyclable.rows && recyclable.rows[0] ? recyclable.rows[0].cnt : 0
-            if (recCnt > 0) {
-               console.log(`[LimitCheck] Limit reached but found ${recCnt} recyclable init sessions. allowing.`)
-               return true
-            }
-            return false
-          }
-          return true
-        }
-    } else {
+    const subRes = await db.pool.query('SELECT s.period_start,s.period_end,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
+    
+    if (!subRes.rows || !subRes.rows.length) {
         console.log(`[LimitCheck] User ${userId} No Subscription found`)
+        return true // Default to allow if no sub? Or block? Original code allowed.
     }
-  }catch(e){ console.error('session limit check failed', e && e.message) }
-  return true
+
+    const sub = subRes.rows[0]
+    if (!sub.max_sessions) return true // Unlimited
+
+    // Ensure usage row exists
+    let usageRes = await db.pool.query('SELECT id FROM usage WHERE user_id=$1 AND period_start=$2', [userId, sub.period_start])
+    let usageId
+    if (!usageRes.rows || !usageRes.rows.length) {
+        usageId = uuidv4()
+        // Try insert, ignore if conflict (though uuid shouldn't conflict, race on period_start might duplicate? 
+        // usage table has no unique constraint on (user_id, period_start) in schema but logically should.
+        // Schema: id PK. 
+        await db.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,sessions_count,created_at) VALUES($1,$2,$3,$4,0,0,0,CURRENT_TIMESTAMP)', [usageId, userId, sub.period_start, sub.period_end])
+    } else {
+        usageId = usageRes.rows[0].id
+    }
+
+    // Atomic increment: Only update if current sessions_count < max_sessions
+    const res = await db.pool.query('UPDATE usage SET sessions_count = sessions_count + 1 WHERE id=$1 AND sessions_count < $2', [usageId, sub.max_sessions])
+    
+    if (res.rows && res.rows.changes > 0) {
+        console.log(`[LimitCheck] Reserved slot for user ${userId}.`)
+        return true
+    } else {
+        console.log(`[LimitCheck] User ${userId} session limit reached.`)
+        return false
+    }
+
+  }catch(e){ 
+      console.error('session reservation failed', e && e.message) 
+      // If error (e.g. DB down), strictly we should fail? Or allow?
+      // For safety of business logic, fail? But original code allowed on error.
+      // Let's return false to be safe if we can't verify.
+      return false 
+  }
+}
+
+// helper: rollback session slot (decrement usage)
+async function rollbackSessionSlot(userId){
+    try {
+        const db = require('./db')
+        // We need to find the current usage row again... simpler to just decrement latest active usage
+        const subRes = await db.pool.query('SELECT period_start FROM subscriptions WHERE user_id=$1 ORDER BY period_start DESC LIMIT 1',[userId])
+        if (subRes.rows && subRes.rows.length) {
+             const periodStart = subRes.rows[0].period_start
+             await db.pool.query('UPDATE usage SET sessions_count = sessions_count - 1 WHERE user_id=$1 AND period_start=$2', [userId, periodStart])
+             console.log(`[LimitCheck] Rolled back slot for user ${userId}`)
+        }
+    } catch(e) {
+        console.error('session rollback failed', e)
+    }
 }
 
 class ConnectionManager {
@@ -53,38 +84,8 @@ class ConnectionManager {
   async createSession(userId, agentId){
     // enforce session quota if userId provided
     if (userId){
-      const ok = await checkSessionLimit(userId)
+      const ok = await reserveSessionSlot(userId)
       if (!ok) throw new Error('session limit reached for your plan')
-    }
-
-    // enforce agent/session creation atomically in db to avoid races (best-effort)
-    try{
-      const db = require('./db')
-      if (userId){
-        const subRes = await db.pool.query('SELECT s.period_start,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
-        if (subRes.rows && subRes.rows.length){
-          const p = subRes.rows[0]
-          if (p.max_sessions){
-            const cur = await db.pool.query('SELECT COUNT(*) as cnt FROM sessions WHERE user_id=$1',[userId])
-            const cnt = cur.rows && cur.rows[0] ? cur.rows[0].cnt : 0
-            console.log(`[CreateSession] Atomic Check: ${cnt} >= ${p.max_sessions}`)
-            if (cnt >= p.max_sessions) {
-               // Try to delete one stale session
-               const stale = await db.pool.query("SELECT id FROM sessions WHERE user_id=$1 AND status='init' ORDER BY created_at ASC LIMIT 1", [userId])
-               if (stale.rows && stale.rows.length) {
-                   const staleId = stale.rows[0].id
-                   console.log(`[CreateSession] Auto-cleaning stale init session ${staleId}`)
-                   await this.deleteSession(staleId)
-               } else {
-                   throw new Error('session limit reached for your plan')
-               }
-            }
-          }
-        }
-      }
-    }catch(e){ 
-      if (e.message.includes('session limit')) throw e;
-      /* if db check fails, fallback to previous logic */ 
     }
 
 
@@ -96,6 +97,7 @@ class ConnectionManager {
       await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)',[id,userId,agentId||null,'init',null,`./sessions/${id}`])
     }catch(e){ 
       console.error('db save failed',e.message) 
+      if (userId) await rollbackSessionSlot(userId)
       throw e
     }
 

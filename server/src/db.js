@@ -203,6 +203,43 @@ async function init() {
     }
   }catch(e){ console.error('users phone migration failed', e && e.message) }
 
+  // migration: add ai_enabled to sessions if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(sessions)").all()
+    const hasAi = info.some(c=>c.name==='ai_enabled')
+    if (!hasAi){
+      db.exec("ALTER TABLE sessions ADD COLUMN ai_enabled BOOLEAN DEFAULT 1")
+    }
+  }catch(e){ console.error('sessions ai_enabled migration failed', e && e.message) }
+
+  // migration: add sessions_count to usage if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(usage)").all()
+    const hasSessionsCount = info.some(c=>c.name==='sessions_count')
+    if (!hasSessionsCount){
+      db.exec("ALTER TABLE usage ADD COLUMN sessions_count INTEGER DEFAULT 0")
+      
+      // backfill based on current active sessions for the user
+      // This is a best-effort backfill. It sets usage to *current* count, 
+      // which assumes previous deleted sessions are "forgiven" for the initial migration.
+      // Ideally we would want to count all sessions created in the period, but we don't have that history.
+      const users = db.prepare("SELECT id FROM users").all()
+      for(const u of users){
+          const active = db.prepare("SELECT COUNT(*) as cnt FROM sessions WHERE user_id=?").get(u.id)
+          const cnt = active ? active.cnt : 0
+          if (cnt > 0) {
+             // update the latest usage row
+             // find latest usage
+             const latest = db.prepare("SELECT id FROM usage WHERE user_id=? ORDER BY period_start DESC LIMIT 1").get(u.id)
+             if (latest) {
+                 db.prepare("UPDATE usage SET sessions_count=? WHERE id=?").run(cnt, latest.id)
+             }
+          }
+      }
+    }
+  }catch(e){ console.error('usage sessions_count migration failed', e && e.message) }
+}
+
   // migration: add avatar_url to users if missing
   try{
     const info = db.prepare("PRAGMA table_info(users)").all()
@@ -274,7 +311,7 @@ async function init() {
     })
     insert(plans)
   }catch(e){ console.error('seed plans failed', e && e.message) }
-}
+
 
 
 module.exports = { pool, init, db }
