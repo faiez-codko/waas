@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "sonner";
 
 interface Plan {
   id: string;
@@ -36,6 +37,8 @@ export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -59,9 +62,10 @@ export default function SubscriptionPage() {
     }
   };
 
-  const handlePlanAction = async (planId: string) => {
-     // TODO: Implement upgrade/downgrade logic
-     alert(`Plan selection for ${planId} clicked. Upgrade flow to be implemented.`);
+  const handlePlanAction = (plan: Plan) => {
+    if (subscription?.plan_id === plan.id) return;
+    setSelectedPlan(plan);
+    setShowPaymentModal(true);
   };
 
   const parseFeatures = (features: string) => {
@@ -145,9 +149,9 @@ export default function SubscriptionPage() {
               </ul>
 
               <button
-                onClick={() => handlePlanAction(plan.id)}
+                onClick={() => handlePlanAction(plan)}
                 disabled={isCurrent}
-                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+                className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
                   isCurrent
                     ? "bg-indigo-600 text-white hover:bg-indigo-700 opacity-50 cursor-default"
                     : "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white dark:hover:bg-zinc-700"
@@ -201,6 +205,71 @@ export default function SubscriptionPage() {
           </table>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold">Upgrade to {selectedPlan.name}</h3>
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="rounded-full p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="mb-6 space-y-4">
+              <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800">
+                <p className="text-sm text-indigo-900 dark:text-indigo-100 font-medium">Total Amount</p>
+                <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">${selectedPlan.price_monthly}</p>
+              </div>
+
+              <div className="space-y-4">
+                <p className="font-medium text-sm text-zinc-500 uppercase tracking-wider">Payment Options</p>
+                
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <p className="font-semibold text-sm">NayaPay / SadaPay</p>
+                    <p className="text-sm text-zinc-500 font-mono mt-1">0300-1234567 (Admin Name)</p>
+                  </div>
+                  
+                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <p className="font-semibold text-sm">EasyPaisa / Jazz Cash</p>
+                    <p className="text-sm text-zinc-500 font-mono mt-1">0300-1234567 (Admin Name)</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <p className="font-semibold text-sm">Bank Transfer</p>
+                    <p className="text-sm text-zinc-500 mt-1">Bank: Meezan Bank</p>
+                    <p className="text-sm text-zinc-500 font-mono">Account: 1234567890</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-lg mt-4">
+                <p className="text-sm font-medium mb-2">Instructions:</p>
+                <ol className="list-decimal list-inside text-sm text-zinc-600 dark:text-zinc-400 space-y-1">
+                  <li>Send the exact amount to one of the accounts above.</li>
+                  <li>Take a screenshot of the successful transaction.</li>
+                  <li>Send the screenshot to Admin on WhatsApp:</li>
+                </ol>
+                <p className="mt-2 font-mono font-bold text-center text-lg text-green-600 dark:text-green-400 select-all">
+                  +92 300 1234567
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowPaymentModal(false)}
+              className="w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -298,6 +298,15 @@ async function init() {
     }
   }catch(e){ console.error('agents_meta excluded_numbers migration failed', e && e.message) }
 
+  // migration: add status to invoices if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(invoices)").all()
+    const hasStatus = info.some(c=>c.name==='status')
+    if (!hasStatus){
+      db.exec("ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'Unpaid'")
+    }
+  }catch(e){ console.error('invoices status migration failed', e && e.message) }
+
   // seed plans (idempotent)
   try{
     const stmt = db.prepare("INSERT OR IGNORE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats,price_monthly) VALUES(?,?,?,?,?,?,?)")
