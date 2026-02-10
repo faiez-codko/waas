@@ -173,6 +173,14 @@ app.post('/auth/login', async (req,res)=>{
   }
 })
 
+// public plans endpoint
+app.get('/public/plans', async (req,res)=>{
+  try{
+    const r = await db.pool.query('SELECT id,name,price_monthly,max_sessions,max_agents,max_messages,max_chats,description,features FROM plans ORDER BY price_monthly ASC')
+    res.json({ plans: r.rows })
+  }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
+})
+
 // create a session (returns session id and qr) - authenticated
 app.post('/sessions', auth.verifyToken, async (req, res) => {
   try {

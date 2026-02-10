@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import api from "@/lib/api";
 import { 
   Zap, 
   Shield, 
@@ -17,7 +19,57 @@ import {
 import { Navbar } from "@/components/marketing/Navbar";
 import { Footer } from "@/components/marketing/Footer";
 
+interface Plan {
+  id: string;
+  name: string;
+  price_monthly: number;
+  description: string;
+  features: string;
+  max_sessions: number;
+  max_agents: number;
+  max_messages: number;
+  max_chats: number;
+}
+
 export default function Home() {
+  const [plans, setPlans] = useState<Plan[]>([]);
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const res = await api.get('/public/plans');
+      setPlans(res.data.plans || []);
+    } catch (e) {
+      console.error("Failed to fetch plans", e);
+    }
+  };
+
+  const parseFeatures = (features: string) => {
+    if (!features) return [];
+    try {
+      const parsed = JSON.parse(features);
+      if (Array.isArray(parsed)) return parsed;
+      return [String(parsed)];
+    } catch {
+      return features.split(/[\n,]/).map(f => f.trim()).filter(f => f.length > 0);
+    }
+  };
+
+  const getDisplayFeatures = (plan: Plan) => {
+    const parsed = parseFeatures(plan.features);
+    if (parsed.length > 0) return parsed;
+    
+    return [
+      `${plan.max_sessions === -1 ? "Unlimited" : plan.max_sessions} Sessions`,
+      `${plan.max_agents === -1 ? "Unlimited" : plan.max_agents} Agents`,
+      `${plan.max_messages === -1 ? "Unlimited" : plan.max_messages} Messages/mo`,
+      `${plan.max_chats === -1 ? "Unlimited" : plan.max_chats} Open Chats`
+    ];
+  };
+
   const fadeIn = {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -196,36 +248,34 @@ export default function Home() {
             </div>
 
             <div className="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
-              {[
-                { name: "Basic", price: "Free", features: ["1 Session", "1 Agent", "1,000 Messages/mo", "Community Support"] },
-                { name: "Silver", price: "$29", period: "/mo", popular: true, features: ["3 Sessions", "3 Agents", "10,000 Messages/mo", "Priority Support", "Webhooks"] },
-                { name: "Premium", price: "$99", period: "/mo", features: ["Unlimited Sessions", "Unlimited Agents", "Unlimited Messages", "24/7 Dedicated Support", "Custom Integrations"] }
-              ].map((plan, i) => (
+              {plans.map((plan, i) => (
                 <motion.div
-                  key={plan.name}
+                  key={plan.id || i}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
                   className={`relative flex flex-col rounded-2xl border p-8 ${
-                    plan.popular 
+                    plan.name === "Silver"
                       ? "border-indigo-600 shadow-xl ring-1 ring-indigo-600 dark:bg-zinc-900" 
                       : "border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
                   }`}
                 >
-                  {plan.popular && (
+                  {plan.name === "Silver" && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-4 py-1 text-xs font-semibold text-white">
                       Most Popular
                     </div>
                   )}
                   <div className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">{plan.name}</div>
                   <div className="mb-6 flex items-baseline text-zinc-900 dark:text-white">
-                    <span className="text-4xl font-bold tracking-tight">{plan.price}</span>
-                    {plan.period && <span className="text-zinc-500">{plan.period}</span>}
+                    <span className="text-4xl font-bold tracking-tight">
+                      {plan.price_monthly === 0 ? "Free" : `$${plan.price_monthly}`}
+                    </span>
+                    {plan.price_monthly > 0 && <span className="text-zinc-500">/mo</span>}
                   </div>
                   <ul className="mb-8 flex-1 space-y-4 text-sm text-zinc-600 dark:text-zinc-400">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center">
+                    {getDisplayFeatures(plan).map((feature, idx) => (
+                      <li key={idx} className="flex items-center">
                         <Check className="mr-3 h-4 w-4 text-indigo-600" />
                         {feature}
                       </li>
@@ -234,7 +284,7 @@ export default function Home() {
                   <Link
                     href="/register"
                     className={`rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition ${
-                      plan.popular
+                      plan.name === "Silver"
                         ? "bg-indigo-600 text-white hover:bg-indigo-700"
                         : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
                     }`}
