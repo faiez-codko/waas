@@ -525,18 +525,34 @@ class ConnectionManager {
     }
   }
 
-  async sendMessage(sessionId, toJid, text) {
+  async sendMessage(sessionId, toJid, content) {
     const s = this.sessions.get(sessionId)
     if (!s || !s.sock) throw new Error('Session not active')
 
-    await s.sock.sendMessage(toJid, { text })
+    // normalize content
+    let msgPayload = content
+    let bodyText = ''
+    
+    if (typeof content === 'string') {
+        msgPayload = { text: content }
+        bodyText = content
+    } else {
+        // assume valid baileys content object (e.g. { image: { url: ... }, caption: ... })
+        msgPayload = content
+        // extract text representation for body column
+        bodyText = content.caption || content.text || (content.image ? '[Image]' : content.video ? '[Video]' : content.document ? '[Document]' : '[Media]')
+    }
+    
+    console.log('[ConnectionManager] Sending payload:', JSON.stringify(msgPayload, null, 2))
+
+    await s.sock.sendMessage(toJid, msgPayload)
 
     // persist
     try {
       const db = require('./db')
       const mid = require('uuid').v4()
-      await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, sessionId, 'out', toJid, text, JSON.stringify({ text })])
-      return { id: mid, text, sender: 'me', time: new Date().toISOString(), status: 'sent' }
+      await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, sessionId, 'out', toJid, bodyText, JSON.stringify(msgPayload)])
+      return { id: mid, text: bodyText, sender: 'me', time: new Date().toISOString(), status: 'sent' }
     } catch (e) {
       console.error('persist outgoing manual message failed', e)
       throw e

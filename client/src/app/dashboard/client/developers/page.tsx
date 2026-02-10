@@ -307,6 +307,40 @@ export default function DevelopersPage() {
   }`}'</span>
               </div>
             </div>
+            <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-2 mt-8">Send Media</h3>
+            <p className="text-sm text-zinc-500 mb-4">
+              Send images, videos, audio, or documents by providing a public URL.
+            </p>
+            
+            <div className="relative rounded-lg bg-zinc-900 p-4 font-mono text-sm text-zinc-300 overflow-x-auto">
+              <button 
+                onClick={() => copyToClipboard(`curl -X POST ${origin}/v1/messages \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "session_id": "${sessions[0]?.id || 'SESSION_ID'}",
+    "to": "+1234567890",
+    "type": "image",
+    "url": "https://example.com/image.png",
+    "caption": "Check this out!"
+  }'`)}
+                className="absolute top-4 right-4 p-2 rounded hover:bg-zinc-800 transition"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+              <div className="space-y-1">
+                <span className="text-purple-400">curl</span> -X POST {origin}/v1/messages \<br/>
+                &nbsp;&nbsp;-H <span className="text-green-400">"Authorization: Bearer YOUR_API_KEY"</span> \<br/>
+                &nbsp;&nbsp;-H <span className="text-green-400">"Content-Type: application/json"</span> \<br/>
+                &nbsp;&nbsp;-d <span className="text-yellow-400">'{`{
+    "session_id": "${sessions[0]?.id || 'SESSION_ID'}",
+    "to": "+1234567890",
+    "type": "image",
+    "url": "https://example.com/image.png",
+    "caption": "Check this out!"
+  }`}'</span>
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -322,8 +356,20 @@ export default function DevelopersPage() {
                   <span>Phone number (with country code)</span>
                 </li>
                 <li className="flex gap-2">
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">type</code>
+                  <span>Type of message: <code>text</code> (default), <code>image</code>, <code>video</code>, <code>audio</code>, <code>document</code></span>
+                </li>
+                <li className="flex gap-2">
                   <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">text</code>
-                  <span>Message content</span>
+                  <span>Message content (required for type=text)</span>
+                </li>
+                <li className="flex gap-2">
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">url</code>
+                  <span>Public URL of media (required for media types)</span>
+                </li>
+                <li className="flex gap-2">
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">caption</code>
+                  <span>Optional caption for media</span>
                 </li>
               </ul>
             </div>
